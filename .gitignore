@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+/vendor/
+/coverage/
+/.phpunit.cache/
+/.phpstan.cache/
+/.tools/
+/storage/logs/*
+!/storage/logs/.gitkeep
+.DS_Store

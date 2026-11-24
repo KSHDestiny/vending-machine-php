@@ -1,0 +1,52 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:${LOCAL_PORT:-10000}:10000"
+    volumes:
+      - ./:/var/www/html
+    # The bind mount hides the image's vendor/: sync packages with composer.lock on every
+    # start (a no-op when up to date), and don't start Apache if that fails.
+    command: ["sh", "-c", "composer install --no-interaction --no-progress && exec apache2-foreground"]
+    environment:
+      APP_ENV: local
+      PORT: "10000"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: vending_machine
+      DB_TEST_NAME: vending_machine_test
+      DB_USER: vending_app
+      DB_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Copy .env.example to .env and set JWT_SECRET}
+      # Read only by `composer seed` to create the demo accounts.
+      SEED_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
+      SEED_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.4
+    ports:
+      - "127.0.0.1:${DB_LOCAL_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: vending_machine
+      MYSQL_USER: vending_app
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Copy .env.example to .env and set DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Copy .env.example to .env and set MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Runs only when the volume is first created: adds the integration-test database.
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysql --user=root --password="$$MYSQL_ROOT_PASSWORD" --execute="SELECT 1" --silent --skip-column-names >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  mysql_data:

@@ -1,0 +1,107 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Session;
+
+/*
+ * The web session: the signed-in user id, one-time flash messages and the CSRF token.
+ */
+final class Session
+{
+    /** @var string Key of the CSRF token. */
+    private const CSRF = '_csrf';
+
+    /** @var string Key of the one-time flash message. */
+    private const FLASH = '_flash';
+
+    public function __construct(private readonly SessionStore $store)
+    {
+    }
+
+    /**
+     * The stored value, or null.
+     * @return mixed
+     */
+    public function get(string $key): mixed
+    {
+        return $this->store->get($key);
+    }
+
+    /**
+     * Stores a value.
+     * @return void
+     */
+    public function set(string $key, mixed $value): void
+    {
+        $this->store->set($key, $value);
+    }
+
+    /**
+     * Stores a message that the next page shows once.
+     * @return void
+     */
+    public function flash(string $message): void
+    {
+        $this->store->set(self::FLASH, $message);
+    }
+
+    /**
+     * The flash message, removed so a refresh doesn't show it again, or null.
+     * @return string|null
+     */
+    public function takeFlash(): ?string
+    {
+        $message = $this->store->get(self::FLASH);
+        if ($message !== null) {
+            $this->store->remove(self::FLASH);
+        }
+
+        return is_string($message) ? $message : null;
+    }
+
+    /**
+     * The session's CSRF token, created on first use.
+     * @return string
+     */
+    public function csrfToken(): string
+    {
+        $token = $this->store->get(self::CSRF);
+        if (!is_string($token)) {
+            $token = bin2hex(random_bytes(32));
+            $this->store->set(self::CSRF, $token);
+        }
+
+        return $token;
+    }
+
+    /**
+     * Whether the token matches the session's CSRF token (constant-time).
+     * @return bool
+     */
+    public function isValidCsrfToken(string $token): bool
+    {
+        $expected = $this->store->get(self::CSRF);
+
+        return is_string($expected) && $token !== '' && hash_equals($expected, $token);
+    }
+
+    /**
+     * A new session id and CSRF token, e.g. after login.
+     * @return void
+     */
+    public function regenerate(): void
+    {
+        $this->store->regenerate();
+        $this->store->remove(self::CSRF);
+    }
+
+    /**
+     * Ends the session.
+     * @return void
+     */
+    public function destroy(): void
+    {
+        $this->store->destroy();
+    }
+}

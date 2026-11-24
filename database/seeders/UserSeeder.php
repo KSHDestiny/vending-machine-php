@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\Role;
+use App\Exceptions\ValidationException;
 use App\Repositories\Contracts\UserRepositoryInterface;
+use App\Support\Validator;
 use InvalidArgumentException;
 
 /*
@@ -45,13 +47,17 @@ final class UserSeeder
     }
 
     /**
-     * The password_hash() of a password of at least 8 characters.
+     * The password_hash() of a password meeting the same policy as registration.
      * @return string
      */
     private static function hash(#[\SensitiveParameter] string $password, string $variable): string
     {
-        if (mb_strlen($password) < 8) {
-            throw new InvalidArgumentException("{$variable} must be set to a password of at least 8 characters");
+        try {
+            Validator::check(['password' => $password], [
+                'password' => ['label' => $variable, 'rules' => Validator::PASSWORD_RULES],
+            ]);
+        } catch (ValidationException $e) {
+            throw new InvalidArgumentException($e->errors['password'], previous: $e);
         }
 
         return password_hash($password, PASSWORD_DEFAULT);

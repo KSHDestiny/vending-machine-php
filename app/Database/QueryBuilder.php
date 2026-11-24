@@ -198,36 +198,15 @@ final class QueryBuilder
      */
     public function update(array $values): int
     {
-        $this->requireWhere('update');
+        if ($this->wheres === []) {
+            throw new InvalidArgumentException('update() needs a where() condition');
+        }
+
         $sets = array_map(static fn (string $column): string => self::identifier($column) . ' = ?', array_keys($values));
         $statement = $this->database->pdo()->prepare('UPDATE ' . $this->table . ' SET ' . implode(', ', $sets) . $this->whereSql());
         $statement->execute([...array_values($values), ...$this->bindings]);
 
         return $statement->rowCount();
-    }
-
-    /**
-     * Deletes the matching rows and returns how many were deleted; refuses to run without a WHERE.
-     * @return int
-     */
-    public function delete(): int
-    {
-        $this->requireWhere('delete');
-        $statement = $this->database->pdo()->prepare('DELETE FROM ' . $this->table . $this->whereSql());
-        $statement->execute($this->bindings);
-
-        return $statement->rowCount();
-    }
-
-    /**
-     * Stops an UPDATE or DELETE that would hit every row of the table.
-     * @return void
-     */
-    private function requireWhere(string $action): void
-    {
-        if ($this->wheres === []) {
-            throw new InvalidArgumentException("{$action}() needs a where() condition");
-        }
     }
 
     /**

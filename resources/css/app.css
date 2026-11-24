@@ -1,0 +1,5 @@
+/* Tailwind CSS v4 entry point; compiled to public/assets/app.css by `composer css`. */
+@import "tailwindcss";
+
+@source "../views";
+@source "../../public/assets/app.js";

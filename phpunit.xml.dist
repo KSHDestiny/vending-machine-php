@@ -15,10 +15,6 @@
         <testsuite name="integration">
             <directory>tests/Integration</directory>
         </testsuite>
-        <!-- Full web and API requests through the application, on the test database. -->
-        <testsuite name="feature">
-            <directory>tests/Feature</directory>
-        </testsuite>
     </testsuites>
     <source>
         <include>

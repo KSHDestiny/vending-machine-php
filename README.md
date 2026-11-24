@@ -25,7 +25,8 @@ proxy for the web app.
    | `DB_PASSWORD` | `${{MySQL.MYSQLPASSWORD}}` |
 
 3. Set `APP_ENV=production`, a unique random `JWT_SECRET` (32+ bytes), and a
-   strong `SEED_ADMIN_PASSWORD` (8+ characters) as private service variables.
+   `SEED_ADMIN_PASSWORD` (8+ characters with upper/lowercase letters, a number
+   and a symbol; at most 72 UTF-8 bytes) as private service variables.
    Never commit these values. Add a public domain to the web service, check
    `/health`, and sign in as `admin@example.com`. Customers can register.
 

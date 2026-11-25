@@ -26,7 +26,27 @@ $filtersForm = '<form method="get" action="/admin/users" class="flex flex-wrap g
 ?>
 <?= $partial('page-header', ['title' => 'Users', 'description' => 'Customer and admin accounts.', 'actions' => $filtersForm]) ?>
 
-<div class="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+<div class="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+    <?php // Phones: one card per account. From the sm breakpoint up: the table. ?>
+    <ul class="divide-y divide-slate-100 sm:hidden">
+        <?php foreach ($users->items as $user): ?>
+            <li>
+                <a href="/admin/users/<?= $e($user->id) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700"><?= $e(mb_strtoupper(mb_substr($user->name, 0, 1))) ?></span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate font-medium text-slate-900"><?= $e($user->name) ?></span>
+                        <span class="block truncate text-sm text-slate-500"><?= $e($user->email) ?></span>
+                        <span class="mt-1 flex flex-wrap gap-1"><?= $partial('account-badges', ['user' => $user]) ?></span>
+                    </span>
+                    <span class="text-slate-400" aria-hidden="true">›</span>
+                </a>
+            </li>
+        <?php endforeach ?>
+        <?php if ($users->items === []): ?>
+            <li class="px-4 py-10 text-center text-slate-500">No accounts match these filters.</li>
+        <?php endif ?>
+    </ul>
+    <div class="hidden overflow-x-auto sm:block">
     <table class="min-w-full divide-y divide-slate-200 text-sm">
         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
         <tr>
@@ -55,6 +75,7 @@ $filtersForm = '<form method="get" action="/admin/users" class="flex flex-wrap g
         <?php endif ?>
         </tbody>
     </table>
+    </div>
 </div>
 
 <?= $partial('pagination', ['page' => $users, 'url' => static fn (int $page): string => $url(['page' => $page])]) ?>

@@ -128,6 +128,29 @@
         update();
     });
 
+    // Login cooldown countdown. The server counts wrong passwords in the session and refuses
+    // logins for a while (429); the page tells us how many seconds, and we disable Log in and
+    // count down until then. The server enforces it, so this is only the display.
+    const loginForm = document.querySelector('form[data-login-retry-after]');
+    const cooldown = document.querySelector('[data-login-cooldown]');
+    if (loginForm && cooldown) {
+        const until = Date.now() + Number(loginForm.dataset.loginRetryAfter) * 1000;
+        const button = loginForm.querySelector('button[type="submit"]');
+        const tick = () => {
+            const seconds = Math.ceil((until - Date.now()) / 1000);
+            button.disabled = seconds > 0;
+            if (seconds > 0) {
+                cooldown.textContent = `Too many failed logins. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`;
+                setTimeout(tick, 1000);
+            } else {
+                cooldown.textContent = 'You can try again now.';
+                cooldown.classList.replace('bg-red-50', 'bg-emerald-50');
+                cooldown.classList.replace('text-red-700', 'text-emerald-700');
+            }
+        };
+        tick();
+    }
+
     // Ask before destructive actions such as deleting a product.
     document.querySelectorAll('form[data-confirm]').forEach((form) => {
         form.addEventListener('submit', (event) => {

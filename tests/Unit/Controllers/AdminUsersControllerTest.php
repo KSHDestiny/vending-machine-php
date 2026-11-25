@@ -133,8 +133,8 @@ final class AdminUsersControllerTest extends TestCase
 
         self::assertMatchesRegularExpression('/<button type="submit"[^>]*disabled>Deactivate account<\/button>/', $page, 'the button is disabled on the page');
         self::assertStringContainsString('admin@example.com is the primary admin and cannot be deactivated.', $page);
-        self::assertSame(422, $response->status, 'and the server refuses it anyway');
-        self::assertStringContainsString('admin@example.com is the primary admin and cannot be deactivated.', $response->body);
+        self::assertSame('/admin/users/4', $response->headers['Location'] ?? null, 'and the server refuses it anyway');
+        self::assertStringContainsString('admin@example.com is the primary admin and cannot be deactivated.', $this->app->follow($response)->body);
     }
 
     public function testRejectedChangeShowsTheReasonOnThePage(): void
@@ -143,8 +143,8 @@ final class AdminUsersControllerTest extends TestCase
 
         $response = $this->app->submit('PATCH', '/admin/users/1/status', ['status' => 'inactive']);
 
-        self::assertSame(422, $response->status);
-        self::assertStringContainsString('You cannot deactivate your own account.', $response->body);
+        self::assertSame('/admin/users/1', $response->headers['Location'] ?? null, 'back to the page, so a reload never resends');
+        self::assertStringContainsString('You cannot deactivate your own account.', $this->app->follow($response)->body);
     }
 
     public function testThePrimaryAdminCannotBeChangedToCustomerByAnotherAdmin(): void
@@ -153,8 +153,8 @@ final class AdminUsersControllerTest extends TestCase
 
         $response = $this->app->submit('PATCH', '/admin/users/4/role', ['role' => 'user']);
 
-        self::assertSame(422, $response->status);
-        self::assertStringContainsString('admin@example.com is the primary admin and cannot be changed to Customer.', $response->body);
+        self::assertSame('/admin/users/4', $response->headers['Location'] ?? null);
+        self::assertStringContainsString('admin@example.com is the primary admin and cannot be changed to Customer.', $this->app->follow($response)->body);
     }
 
     public function testChangesNeedTheCsrfToken(): void

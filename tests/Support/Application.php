@@ -26,8 +26,9 @@ final class Application
     /**
      * @param array<string, object> $overrides repositories or the transaction manager to replace
      * @param array{host: string, port: int, name: string, user: string, password: string}|null $database
+     * @param bool $production builds the app as in production (Secure cookies, HSTS)
      */
-    public function __construct(private readonly array $overrides = [], private readonly ?array $database = null)
+    public function __construct(private readonly array $overrides = [], private readonly ?array $database = null, private readonly bool $production = false)
     {
         $this->session = new ArraySessionStore();
     }
@@ -42,6 +43,19 @@ final class Application
     public function send(string $method, string $path, array $body = [], array $query = [], array $headers = []): Response
     {
         return $this->kernel()->handle(new Request($method, $path, $body, $query, $headers));
+    }
+
+    /**
+     * The page a browser lands on after a redirect (GET of its Location), or the response itself.
+     * @return Response
+     */
+    public function follow(Response $response): Response
+    {
+        $location = $response->headers['Location'] ?? null;
+
+        return in_array($response->status, [301, 302, 303], true) && is_string($location)
+            ? $this->send('GET', (string) parse_url($location, PHP_URL_PATH))
+            : $response;
     }
 
     /**
@@ -117,7 +131,7 @@ final class Application
     {
         $root = dirname(__DIR__, 2);
         $config = [
-            'production' => false,
+            'production' => $this->production,
             'db' => $this->database ?? ['host' => 'unused', 'port' => 3306, 'name' => 'unused', 'user' => 'unused', 'password' => 'unused'],
             'jwt' => ['secret' => self::JWT_SECRET, 'ttl' => 3600],
             'paths' => ['views' => $root . '/resources/views', 'migrations' => $root . '/database/migrations', 'log' => sys_get_temp_dir() . '/vending-test.log'],

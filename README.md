@@ -33,6 +33,15 @@ their purchase history. The same rules are available as a JWT-secured REST API.
   and a symbol (at most 72 bytes).
 - **Security:** CSRF tokens on browser forms, escaped HTML output, prepared
   statements, HttpOnly/SameSite session cookies and session renewal on login.
+- **Security headers:** a Content-Security-Policy on every response (only the
+  site's own scripts; `/docs` also allows the pinned Swagger UI files and its one
+  inline script by hash), `Permissions-Policy`, and HSTS in production.
+- **Login cooldown:** the 5th wrong password in a row makes the server refuse web
+  logins from that session for 30 seconds, checked before the password, with a
+  countdown on the form. It is kept in the session, so no extra table or file.
+- **Post, then redirect:** every web form redirects after it is sent, on success and
+  on errors alike. Errors and the values entered (never passwords) are shown once on
+  the page it redirects to, so reloading a page never resends a form or a purchase.
 - **Stock history:** every stock change is recorded (initial stock, restock,
   purchase, adjustment) with the stock before and after, who made it and why, in
   the same transaction as the change. Admins restock from each product's stock
@@ -219,3 +228,10 @@ SELECT COUNT(*) FROM transactions WHERE product_name = '';
 - Users cannot be deleted; admins deactivate them instead. Purchase records cannot be edited or deleted:
   purchases are kept as an audit history. Products use soft deletes.
 - API tokens cannot be revoked before they expire.
+- Login limiting is per browser session: a client that drops its session cookie starts
+  afresh, and API logins (`POST /api/login`) are not limited. Real brute-force
+  protection would need per-account or per-IP counts kept on the server.
+- Request floods are not blocked by the app: a script can keep fetching new sessions
+  and posting logins (each costs a password check), or call `POST /api/login`
+  directly. Blocking that needs per-IP limits in front of the app, for example a
+  Cloudflare rate-limit rule on `/login` and `/api/login`.

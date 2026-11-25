@@ -17,6 +17,7 @@ use App\Http\Session\DatabaseSessionHandler;
 use App\Http\Session\NativeSessionStore;
 use App\Http\Routing\Router;
 use App\Http\Session\Session;
+use App\Auth\LoginCooldown;
 use App\Auth\SessionAuth;
 use App\Http\Session\SessionStore;
 use App\Auth\TokenAuth;
@@ -81,7 +82,7 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
         $session,
         new Controllers\HealthController($database, $logger),
         new Controllers\DocsController($view),
-        new Controllers\AuthController($authService, $sessionAuth, $session, $view),
+        new Controllers\AuthController($authService, $sessionAuth, $session, $view, new LoginCooldown($session)),
         new Controllers\AccountController($accountService, $sessionAuth, $session, $view),
         new Controllers\ProductsController($productService, $purchaseService, $inventoryService, $sessionAuth, $session, $view),
         new Controllers\TransactionsController($purchaseService, $sessionAuth, $view),
@@ -100,5 +101,5 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
     );
 
     // The kernel runs each request and turns any exception into an error response.
-    return new Kernel($router, new ErrorHandler($view, $logger), $view);
+    return new Kernel($router, new ErrorHandler($view, $logger), $view, $config['production']);
 };

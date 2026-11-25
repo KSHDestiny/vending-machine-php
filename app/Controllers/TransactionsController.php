@@ -12,6 +12,7 @@ use App\Auth\SessionAuth;
 use App\Http\View;
 use App\Models\User;
 use App\Services\PurchaseService;
+use App\Support\TransactionFilter;
 
 /*
  * Purchase history: a customer's own purchases, the purchase confirmation, and
@@ -52,15 +53,50 @@ final class TransactionsController
     }
 
     /**
-     * Every purchase, for admins.
+     * Every purchase for admins, filtered by ?customer=, ?product=, ?from= and ?to= (Y-m-d).
      * @return Response
      */
     #[Route('/admin/transactions', ['GET'], ['admin'])]
     public function index(Request $request): Response
     {
-        $page = $this->purchases->all((int) $request->query('page'));
+        $filter = self::filter($request);
 
-        return $this->view->render('admin/transactions', ['title' => 'All transactions', 'transactions' => $page]);
+        return $this->view->render('admin/transactions', [
+            'title' => 'All transactions',
+            'transactions' => $this->purchases->all((int) $request->query('page'), $filter),
+            'totals' => $this->purchases->totals($filter),
+            'filter' => $filter,
+        ]);
+    }
+
+    /**
+     * The filtered purchases as a CSV download, with the same filters as the list.
+     * @return Response
+     */
+    #[Route('/admin/transactions/export', ['GET'], ['admin'])]
+    public function export(Request $request): Response
+    {
+        $filename = 'transactions-' . gmdate('Y-m-d') . '.csv';
+
+        return new Response(200, $this->purchases->csv(self::filter($request)), [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    /**
+     * The admin filters from the query string.
+     * @return TransactionFilter
+     */
+    private static function filter(Request $request): TransactionFilter
+    {
+        return TransactionFilter::fromQuery([
+            'customer' => $request->query('customer'),
+            'product' => $request->query('product'),
+            'from' => $request->query('from'),
+            'to' => $request->query('to'),
+        ]);
     }
 
     /**

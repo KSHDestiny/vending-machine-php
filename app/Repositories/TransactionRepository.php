@@ -9,6 +9,7 @@ use App\Database\QueryBuilder;
 use App\Models\Transaction;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Support\Page;
+use App\Support\TransactionFilter;
 use DateTimeImmutable;
 use LogicException;
 
@@ -18,11 +19,15 @@ final class TransactionRepository implements TransactionRepositoryInterface
     {
     }
 
-    public function create(int $userId, int $productId, int $quantity, string $unitPrice, string $totalPrice): Transaction
+    /** @var int Rows per batch when exporting. */
+    private const BATCH = 500;
+
+    public function create(int $userId, int $productId, string $productName, int $quantity, string $unitPrice, string $totalPrice): Transaction
     {
         $id = $this->database->table('transactions')->insert([
             'user_id' => $userId,
             'product_id' => $productId,
+            'product_name' => $productName,
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total_price' => $totalPrice,
@@ -43,9 +48,28 @@ final class TransactionRepository implements TransactionRepositoryInterface
         return $this->withNames()->where('transactions.user_id', $userId)->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
     }
 
-    public function paginate(int $page, int $perPage): Page
+    public function paginate(int $page, int $perPage, ?TransactionFilter $filter = null): Page
     {
-        return $this->withNames()->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
+        return $this->filtered($filter ?? new TransactionFilter())->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
+    }
+
+    public function totals(TransactionFilter $filter): array
+    {
+        $totals = $this->filtered($filter)->countAndSum('transactions.total_price');
+
+        return ['count' => $totals['count'], 'revenue' => $totals['sum'] ?? '0.000'];
+    }
+
+    public function each(TransactionFilter $filter): iterable
+    {
+        $before = PHP_INT_MAX;
+        do {
+            $rows = $this->filtered($filter)->where('transactions.id', $before, '<')->orderBy('transactions.id', 'desc')->take(self::BATCH);
+            foreach ($rows as $row) {
+                yield self::toTransaction($row);
+                $before = (int) $row['id'];
+            }
+        } while (count($rows) === self::BATCH);
     }
 
     public function summary(?int $userId = null): array
@@ -106,14 +130,32 @@ final class TransactionRepository implements TransactionRepositoryInterface
     }
 
     /**
-     * A query on transactions with the product name and the buyer's name and email.
+     * A query on transactions with the buyer's name and email; the product name is the copy stored at purchase.
      * @return QueryBuilder
      */
     private function withNames(): QueryBuilder
     {
         return $this->database->table('transactions')
-            ->select('transactions.*', 'products.name AS product_name', 'users.name AS user_name', 'users.email AS user_email')
-            ->join('products', 'products.id', 'transactions.product_id')
+            ->select('transactions.*', 'users.name AS user_name', 'users.email AS user_email')
             ->join('users', 'users.id', 'transactions.user_id');
+    }
+
+    /**
+     * withNames() narrowed by the filter: customer name or email, product name, and whole days from/to.
+     * @return QueryBuilder
+     */
+    private function filtered(TransactionFilter $filter): QueryBuilder
+    {
+        $query = $this->withNames()
+            ->whereContainsAny(['users.name', 'users.email'], $filter->customer)
+            ->whereContains('transactions.product_name', $filter->product);
+        if ($filter->from !== null) {
+            $query->where('transactions.created_at', $filter->from->format('Y-m-d 00:00:00'), '>=');
+        }
+        if ($filter->to !== null) {
+            $query->where('transactions.created_at', $filter->to->modify('+1 day')->format('Y-m-d 00:00:00'), '<');
+        }
+
+        return $query;
     }
 }

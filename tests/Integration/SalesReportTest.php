@@ -21,8 +21,8 @@ final class SalesReportTest extends DatabaseTestCase
         $pepsi = (new ProductRepository($this->database))->create('Pepsi', '6.885', 100);
         $sell = function (string $at, int $quantity) use ($buyer, $pepsi): void {
             $this->database->pdo()->prepare(
-                'INSERT INTO transactions (user_id, product_id, quantity, unit_price, total_price, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-            )->execute([$buyer->id, $pepsi->id, $quantity, '6.885', bcmul('6.885', (string) $quantity, 3), $at]);
+                'INSERT INTO transactions (user_id, product_id, product_name, quantity, unit_price, total_price, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            )->execute([$buyer->id, $pepsi->id, 'Pepsi', $quantity, '6.885', bcmul('6.885', (string) $quantity, 3), $at]);
         };
         $sell('2026-01-01 23:59:59', 1); // before the range
         $sell('2026-01-02 00:00:00', 2);

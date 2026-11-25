@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     CONSTRAINT inventory_movements_change_adds_up CHECK (quantity_after = quantity_before + quantity_change)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- NOTE (data backfill, kept here for now): this INSERT records each existing product's stock
+-- as INITIAL_STOCK, so the history of databases created before this migration still adds up
+-- to the current stock. It may move out to a one-off SQL step like migration 009's; see
+-- "Data backfills" in README.md.
 INSERT INTO inventory_movements (product_id, movement_type, quantity_change, quantity_before, quantity_after, reason)
 SELECT id, 'INITIAL_STOCK', quantity_available, 0, quantity_available, 'Stock before movement history began'
 FROM products;

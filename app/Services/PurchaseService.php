@@ -11,7 +11,9 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
+use App\Support\Csv;
 use App\Support\Page;
+use App\Support\TransactionFilter;
 use App\Support\Validator;
 
 /*
@@ -55,7 +57,7 @@ final class PurchaseService
             $total = $product->totalFor($quantity);
 
             $this->products->decrementStock($product->id, $quantity);
-            $transaction = $this->transactions->create($buyer->id, $product->id, $quantity, $product->price, $total);
+            $transaction = $this->transactions->create($buyer->id, $product->id, $product->name, $quantity, $product->price, $total);
             $this->inventory->recordPurchase($buyer, $product, $quantity, $transaction->id);
 
             return $transaction;
@@ -72,12 +74,35 @@ final class PurchaseService
     }
 
     /**
-     * One page of every purchase, newest first (admin view).
+     * One page of every purchase matching the filter, newest first (admin view).
      * @return Page<Transaction>
      */
-    public function all(int $page): Page
+    public function all(int $page, ?TransactionFilter $filter = null): Page
     {
-        return $this->transactions->paginate(max(1, $page), self::PER_PAGE);
+        return $this->transactions->paginate(max(1, $page), self::PER_PAGE, $filter);
+    }
+
+    /**
+     * How many purchases match the filter and their exact total.
+     * @return array{count: int, revenue: string}
+     */
+    public function totals(TransactionFilter $filter): array
+    {
+        return $this->transactions->totals($filter);
+    }
+
+    /**
+     * The purchases matching the filter as CSV, newest first, with a header line.
+     * @return string
+     */
+    public function csv(TransactionFilter $filter): string
+    {
+        $csv = Csv::line(['Purchase', 'Date (UTC)', 'Buyer', 'Email', 'Product', 'Quantity', 'Unit price', 'Total']);
+        foreach ($this->transactions->each($filter) as $t) {
+            $csv .= Csv::line([$t->id, $t->createdAt, (string) $t->userName, (string) $t->userEmail, (string) $t->productName, $t->quantity, $t->unitPrice, $t->totalPrice]);
+        }
+
+        return $csv;
     }
 
     /**

@@ -110,6 +110,24 @@ final class QueryBuilder
     }
 
     /**
+     * Adds "(a LIKE %search% OR b LIKE %search% ...)" with wildcards escaped; an empty search adds nothing.
+     * @param list<string> $columns
+     * @return self
+     */
+    public function whereContainsAny(array $columns, string $search): self
+    {
+        if ($search === '' || $columns === []) {
+            return $this;
+        }
+
+        $pattern = '%' . addcslashes($search, '%_\\') . '%';
+        $this->wheres[] = '(' . implode(' OR ', array_map(static fn (string $column): string => self::column($column) . ' LIKE ?', $columns)) . ')';
+        array_push($this->bindings, ...array_fill(0, count($columns), $pattern));
+
+        return $this;
+    }
+
+    /**
      * Adds an ORDER BY term; any direction other than 'desc' sorts ascending.
      * @return self
      */

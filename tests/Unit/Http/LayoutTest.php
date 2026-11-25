@@ -46,7 +46,7 @@ final class LayoutTest extends TestCase
 
         $body = $this->app->send('GET', '/admin/products')->body;
 
-        self::assertSame(['/admin', '/admin/products', '/admin/transactions', '/products', '/account'], self::navLinks($body));
+        self::assertSame(['/admin', '/admin/products', '/admin/transactions', '/admin/users', '/products', '/account'], self::navLinks($body));
         self::assertSame(['/admin/products'], self::currentLinks($body));
     }
 

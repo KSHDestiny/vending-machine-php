@@ -11,4 +11,13 @@ enum Role: string
 {
     case Admin = 'admin';
     case User = 'user';
+
+    /**
+     * The name shown to people: customers, not "users".
+     * @return string
+     */
+    public function label(): string
+    {
+        return $this === self::Admin ? 'Admin' : 'Customer';
+    }
 }

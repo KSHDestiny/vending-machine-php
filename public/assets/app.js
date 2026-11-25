@@ -102,6 +102,32 @@
         update();
     });
 
+    // Forms marked data-require-change (the role picker): Save stays disabled until a
+    // different option is chosen, so an unchanged form is never sent. The server checks again.
+    document.querySelectorAll('form[data-require-change]').forEach((form) => {
+        const fieldset = form.querySelector('fieldset');
+        if (fieldset?.disabled) {
+            return;
+        }
+        const button = form.querySelector('button[type="submit"]');
+        const hint = form.querySelector('[data-change-hint]');
+        const serialize = () => new URLSearchParams(new FormData(form)).toString();
+        const initial = serialize();
+        const changed = () => serialize() !== initial;
+        const update = () => {
+            button.disabled = !changed();
+            hint?.classList.toggle('hidden', changed());
+        };
+        form.addEventListener('change', update);
+        form.addEventListener('submit', (event) => {
+            if (!changed()) {
+                event.preventDefault();
+                update();
+            }
+        });
+        update();
+    });
+
     // Ask before destructive actions such as deleting a product.
     document.querySelectorAll('form[data-confirm]').forEach((form) => {
         form.addEventListener('submit', (event) => {

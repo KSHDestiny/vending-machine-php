@@ -14,6 +14,12 @@ their purchase history. The same rules are available as a JWT-secured REST API.
   always creates a customer. The admin account comes from the seeder.
 - **Role-based access:** checked on the server for every request. Only admins can
   manage products; only customers can buy.
+- **User management:** admins search and filter accounts, change roles and
+  deactivate or reactivate them. Deactivated accounts cannot sign in, and an open
+  session or API token stops working on the next request. Admins cannot change
+  their own account, and the last active admin can be neither demoted nor
+  deactivated (the admin rows are locked, so two admins acting at once cannot
+  bypass this).
 - **Purchasing:** one database transaction locks the product row, checks stock,
   decrements it and records the purchase at the database price. A failure rolls
   everything back, and competing buyers cannot oversell.
@@ -32,7 +38,7 @@ their purchase history. The same rules are available as a JWT-secured REST API.
 
 | Table | Columns | Notes |
 | --- | --- | --- |
-| `users` | id, name, email (unique), password (hash), role (`admin`/`user`), timestamps | Plain passwords are never stored. |
+| `users` | id, name, email (unique), password (hash), role (`admin`/`user`), status (`active`/`inactive`), deactivated_at, timestamps | Plain passwords are never stored. Deactivated accounts keep their purchases. |
 | `products` | id, name, price `DECIMAL(10,3)`, quantity_available (unsigned), timestamps, deleted_at | Deleting a product is a soft delete, so purchase history keeps it. |
 | `transactions` | id, user_id → users, product_id → products, quantity, unit_price, total_price, created_at | Stores the price at purchase time. Foreign keys restrict deletes; a check keeps `total_price = unit_price × quantity`. |
 
@@ -82,7 +88,7 @@ tests; it is created only when the MySQL volume is new.
 | Guests | `/login`, `/register` |
 | Signed in | `/products` (search, sort, pages), `/products/{id}`, `/account` |
 | Customers | Buy from `/products/{id}`, see `/my-transactions` and each confirmation |
-| Admins | `/admin` dashboard, `/admin/products` (add, edit, delete), `/admin/transactions` |
+| Admins | `/admin` dashboard with a 7/14/30-day sales trend, `/admin/products` (add, edit, delete), `/admin/transactions`, `/admin/users` (search, filter, change role, activate or deactivate) |
 
 ## REST API
 
@@ -170,7 +176,7 @@ volume; services sleep when idle and stop if the credit is exhausted.
 
 ## Known limitations
 
-- Users cannot be deleted, and purchase records cannot be edited or deleted:
+- Users cannot be deleted; admins deactivate them instead. Purchase records cannot be edited or deleted:
   purchases are kept as an audit history. Products use soft deletes.
 - Sessions are stored as files in the web container, so a restart signs users
   out. API tokens cannot be revoked before they expire.

@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Enums\Role;
 use App\Exceptions\ValidationException;
+use App\Models\User;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Support\Validator;
 use InvalidArgumentException;
@@ -17,7 +18,7 @@ use InvalidArgumentException;
 final class UserSeeder
 {
     /** @var string The initial admin account's email. */
-    public const ADMIN_EMAIL = 'admin@example.com';
+    public const ADMIN_EMAIL = User::PRIMARY_ADMIN_EMAIL;
 
     /** @var string The demo customer account's email. */
     public const USER_EMAIL = 'user@example.com';

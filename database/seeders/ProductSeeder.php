@@ -30,13 +30,17 @@ final class ProductSeeder
                 return [];
             }
 
-            $insert = $this->database->pdo()->prepare(
-                'INSERT INTO products (name, price, quantity_available) VALUES (?, ?, ?)',
+            $pdo = $this->database->pdo();
+            $insert = $pdo->prepare('INSERT INTO products (name, price, quantity_available) VALUES (?, ?, ?)');
+            // The starting stock goes into the stock history too, so it always explains the stock.
+            $record = $pdo->prepare(
+                "INSERT INTO inventory_movements (product_id, movement_type, quantity_change, quantity_before, quantity_after, reason) VALUES (?, 'INITIAL_STOCK', ?, 0, ?, 'Seeded')",
             );
 
             $added = [];
             foreach (self::PRODUCTS as [$name, $price, $stock]) {
                 $insert->execute([$name, $price, $stock]);
+                $record->execute([(int) $pdo->lastInsertId(), $stock, $stock]);
                 $added[] = $name;
             }
 

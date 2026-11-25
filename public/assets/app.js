@@ -79,20 +79,77 @@
         });
     });
 
-    // Live total on the purchase form: quantity × price, in thousandths to avoid float rounding.
+    // Money like the server's View::money(): thousands separators, 2 to 3 decimals
+    // (6878.115 → "6,878.115", 3.990 → "3.99"). Exact integer thousandths, no floats.
+    const money = (thousandths) => {
+        const whole = (thousandths / 1000n).toLocaleString('en-US');
+        const fraction = (thousandths % 1000n).toString().padStart(3, '0').replace(/0+$/, '').padEnd(2, '0');
+
+        return `${whole}.${fraction}`;
+    };
+
+    // Live total on the purchase form: quantity × price.
     document.querySelectorAll('input[data-price]').forEach((input) => {
         const total = input.form.querySelector('[data-total]');
-        const thousandths = Math.round(Number(input.dataset.price) * 1000);
+        const [whole, fraction = ''] = input.dataset.price.split('.');
+        const thousandths = BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, '0').slice(0, 3));
         const update = () => {
-            const quantity = Number.parseInt(input.value, 10);
-            if (total && Number.isInteger(quantity) && quantity > 0) {
-                const cents = (thousandths * quantity / 1000).toFixed(3).replace(/0$/, '');
-                total.textContent = `$${cents}`;
+            if (total && /^[1-9][0-9]{0,9}$/.test(input.value)) {
+                total.textContent = `$${money(thousandths * BigInt(input.value))}`;
             }
         };
         input.addEventListener('input', update);
         update();
     });
+
+    // Forms marked data-require-change (the role picker): Save stays disabled until a
+    // different option is chosen, so an unchanged form is never sent. The server checks again.
+    document.querySelectorAll('form[data-require-change]').forEach((form) => {
+        const fieldset = form.querySelector('fieldset');
+        if (fieldset?.disabled) {
+            return;
+        }
+        const button = form.querySelector('button[type="submit"]');
+        const hint = form.querySelector('[data-change-hint]');
+        const serialize = () => new URLSearchParams(new FormData(form)).toString();
+        const initial = serialize();
+        const changed = () => serialize() !== initial;
+        const update = () => {
+            button.disabled = !changed();
+            hint?.classList.toggle('hidden', changed());
+        };
+        form.addEventListener('change', update);
+        form.addEventListener('submit', (event) => {
+            if (!changed()) {
+                event.preventDefault();
+                update();
+            }
+        });
+        update();
+    });
+
+    // Login cooldown countdown. The server counts wrong passwords in the session and refuses
+    // logins for a while (429); the page tells us how many seconds, and we disable Log in and
+    // count down until then. The server enforces it, so this is only the display.
+    const loginForm = document.querySelector('form[data-login-retry-after]');
+    const cooldown = document.querySelector('[data-login-cooldown]');
+    if (loginForm && cooldown) {
+        const until = Date.now() + Number(loginForm.dataset.loginRetryAfter) * 1000;
+        const button = loginForm.querySelector('button[type="submit"]');
+        const tick = () => {
+            const seconds = Math.ceil((until - Date.now()) / 1000);
+            button.disabled = seconds > 0;
+            if (seconds > 0) {
+                cooldown.textContent = `Too many failed logins. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`;
+                setTimeout(tick, 1000);
+            } else {
+                cooldown.textContent = 'You can try again now.';
+                cooldown.classList.replace('bg-red-50', 'bg-emerald-50');
+                cooldown.classList.replace('text-red-700', 'text-emerald-700');
+            }
+        };
+        tick();
+    }
 
     // Ask before destructive actions such as deleting a product.
     document.querySelectorAll('form[data-confirm]').forEach((form) => {

@@ -35,7 +35,10 @@ final class AccountController
     #[Route('/account', ['GET'], ['auth'])]
     public function show(Request $request): Response
     {
-        return $this->page($this->user()->name, [], []);
+        $name = $this->session->takeForm('account-name');
+        $password = $this->session->takeForm('account-password');
+
+        return $this->page($name['input']['name'] ?? $this->user()->name, $name['errors'], $password['errors']);
     }
 
     /**
@@ -48,7 +51,9 @@ final class AccountController
         try {
             $this->accounts->updateName($this->user(), $request->only('name'));
         } catch (ValidationException $e) {
-            return $this->page($request->input('name'), $e->errors, [], 422);
+            $this->session->flashForm('account-name', ['name' => $request->input('name')], $e->errors);
+
+            return Response::redirect('/account');
         }
 
         $this->session->flash('Your name was updated.');
@@ -67,7 +72,9 @@ final class AccountController
         try {
             $this->accounts->changePassword($user, $request->only('current_password', 'password', 'password_confirmation'));
         } catch (ValidationException $e) {
-            return $this->page($user->name, [], $e->errors, 422);
+            $this->session->flashForm('account-password', [], $e->errors);
+
+            return Response::redirect('/account');
         }
 
         // A new session id after a password change, against session fixation.
@@ -83,15 +90,15 @@ final class AccountController
      * @param array<string, string> $passwordErrors
      * @return Response
      */
-    private function page(string $name, array $nameErrors, array $passwordErrors, int $status = 200): Response
+    private function page(string $name, array $nameErrors, array $passwordErrors): Response
     {
         return $this->view->render('account/show', [
-            'title' => 'My account',
+            'title' => 'Account',
             'user' => $this->user(),
             'name' => $name,
             'nameErrors' => $nameErrors,
             'passwordErrors' => $passwordErrors,
-        ], $status);
+        ]);
     }
 
     /**

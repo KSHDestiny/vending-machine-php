@@ -9,6 +9,8 @@ use App\Database\QueryBuilder;
 use App\Models\Transaction;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Support\Page;
+use App\Support\TransactionFilter;
+use DateTimeImmutable;
 use LogicException;
 
 final class TransactionRepository implements TransactionRepositoryInterface
@@ -17,11 +19,15 @@ final class TransactionRepository implements TransactionRepositoryInterface
     {
     }
 
-    public function create(int $userId, int $productId, int $quantity, string $unitPrice, string $totalPrice): Transaction
+    /** @var int Rows per batch when exporting. */
+    private const BATCH = 500;
+
+    public function create(int $userId, int $productId, string $productName, int $quantity, string $unitPrice, string $totalPrice): Transaction
     {
         $id = $this->database->table('transactions')->insert([
             'user_id' => $userId,
             'product_id' => $productId,
+            'product_name' => $productName,
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total_price' => $totalPrice,
@@ -42,18 +48,38 @@ final class TransactionRepository implements TransactionRepositoryInterface
         return $this->withNames()->where('transactions.user_id', $userId)->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
     }
 
-    public function paginate(int $page, int $perPage): Page
+    public function paginate(int $page, int $perPage, ?TransactionFilter $filter = null): Page
     {
-        return $this->withNames()->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
+        return $this->filtered($filter ?? new TransactionFilter())->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
     }
 
-    public function summary(): array
+    public function totals(TransactionFilter $filter): array
+    {
+        $totals = $this->filtered($filter)->countAndSum('transactions.total_price');
+
+        return ['count' => $totals['count'], 'revenue' => $totals['sum'] ?? '0.000'];
+    }
+
+    public function each(TransactionFilter $filter): iterable
+    {
+        $before = PHP_INT_MAX;
+        do {
+            $rows = $this->filtered($filter)->where('transactions.id', $before, '<')->orderBy('transactions.id', 'desc')->take(self::BATCH);
+            foreach ($rows as $row) {
+                yield self::toTransaction($row);
+                $before = (int) $row['id'];
+            }
+        } while (count($rows) === self::BATCH);
+    }
+
+    public function summary(?int $userId = null): array
     {
         // Raw SQL on purpose: aggregates with exact DECIMAL totals.
         $statement = $this->database->pdo()->prepare(
-            'SELECT COUNT(*) AS count, COALESCE(SUM(quantity), 0) AS items_sold, COALESCE(SUM(total_price), 0.000) AS revenue FROM transactions',
+            'SELECT COUNT(*) AS count, COALESCE(SUM(quantity), 0) AS items_sold, COALESCE(SUM(total_price), 0.000) AS revenue FROM transactions'
+            . ($userId === null ? '' : ' WHERE user_id = ?'),
         );
-        $statement->execute();
+        $statement->execute($userId === null ? [] : [$userId]);
         $row = $statement->fetch();
         $row = is_array($row) ? $row : [];
 
@@ -62,6 +88,24 @@ final class TransactionRepository implements TransactionRepositoryInterface
             'items_sold' => (int) ($row['items_sold'] ?? 0),
             'revenue' => (string) ($row['revenue'] ?? '0.000'),
         ];
+    }
+
+    public function dailySales(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        // Raw SQL on purpose: grouped DECIMAL sums. A plain range on created_at can use its index.
+        $statement = $this->database->pdo()->prepare(
+            'SELECT DATE(created_at) AS day, COUNT(*) AS count, SUM(total_price) AS revenue FROM transactions'
+            . ' WHERE created_at >= ? AND created_at < ? GROUP BY day ORDER BY day',
+        );
+        $statement->execute([$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')]);
+
+        $days = [];
+        foreach ($statement->fetchAll() as $row) {
+            $revenue = (string) $row['revenue'];
+            $days[(string) $row['day']] = ['count' => (int) $row['count'], 'revenue' => is_numeric($revenue) ? $revenue : '0.000'];
+        }
+
+        return $days;
     }
 
     /**
@@ -86,14 +130,32 @@ final class TransactionRepository implements TransactionRepositoryInterface
     }
 
     /**
-     * A query on transactions with the product name and the buyer's name and email.
+     * A query on transactions with the buyer's name and email; the product name is the copy stored at purchase.
      * @return QueryBuilder
      */
     private function withNames(): QueryBuilder
     {
         return $this->database->table('transactions')
-            ->select('transactions.*', 'products.name AS product_name', 'users.name AS user_name', 'users.email AS user_email')
-            ->join('products', 'products.id', 'transactions.product_id')
+            ->select('transactions.*', 'users.name AS user_name', 'users.email AS user_email')
             ->join('users', 'users.id', 'transactions.user_id');
+    }
+
+    /**
+     * withNames() narrowed by the filter: customer name or email, product name, and whole days from/to.
+     * @return QueryBuilder
+     */
+    private function filtered(TransactionFilter $filter): QueryBuilder
+    {
+        $query = $this->withNames()
+            ->whereContainsAny(['users.name', 'users.email'], $filter->customer)
+            ->whereContains('transactions.product_name', $filter->product);
+        if ($filter->from !== null) {
+            $query->where('transactions.created_at', $filter->from->format('Y-m-d 00:00:00'), '>=');
+        }
+        if ($filter->to !== null) {
+            $query->where('transactions.created_at', $filter->to->modify('+1 day')->format('Y-m-d 00:00:00'), '<');
+        }
+
+        return $query;
     }
 }

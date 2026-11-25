@@ -11,11 +11,14 @@ use Throwable;
 
 /*
  * Renders resources/views/<template>.php inside layouts/app.php. Every template
- * gets $e (HTML escaping), $money, $csrf (hidden token field), $partial and
- * $currentUser; escape all output with $e.
+ * gets $e (HTML escaping), $money, $csrf (hidden token field), $partial,
+ * $currentUser and $currentPath; escape all output with $e.
  */
 final class View
 {
+    /** @var string The request path, for marking the current page in the navigation. */
+    private string $currentPath = '/';
+
     public function __construct(
         private readonly string $directory,
         private readonly Session $session,
@@ -38,6 +41,25 @@ final class View
         ]);
 
         return Response::html($page, $status);
+    }
+
+    /**
+     * An HTML response with the template as the whole page, without the app layout (e.g. the API docs).
+     * @param array<string, mixed> $data
+     * @return Response
+     */
+    public function standalone(string $template, array $data = []): Response
+    {
+        return Response::html($this->capture($template, $data));
+    }
+
+    /**
+     * Sets the path of the request being handled; the Kernel calls this first.
+     * @return void
+     */
+    public function setCurrentPath(string $path): void
+    {
+        $this->currentPath = $path;
     }
 
     /**
@@ -70,6 +92,7 @@ final class View
             'csrf' => '<input type="hidden" name="_token" value="' . $e($this->session->csrfToken()) . '">',
             'partial' => fn (string $name, array $values = []): string => $this->capture("partials/{$name}", $values),
             'currentUser' => $this->auth->user(),
+            'currentPath' => $this->currentPath,
         ];
 
         return (static function (string $__file, array $__data): string {

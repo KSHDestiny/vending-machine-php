@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Enums\Role;
+use App\Enums\UserStatus;
 use App\Exceptions\AuthenticationException;
 use App\Exceptions\ValidationException;
 use App\Models\User;
@@ -99,5 +100,26 @@ final class AuthServiceTest extends TestCase
                 self::assertSame('Invalid email or password.', $e->getMessage());
             }
         }
+    }
+
+    public function testDeactivatedAccountCannotLogInAndFailsLikeAWrongPassword(): void
+    {
+        $users = $this->createStub(UserRepositoryInterface::class);
+        $users->method('findByEmail')->willReturn(new User(2, 'Buyer', 'buyer@example.com', password_hash('secret123', PASSWORD_DEFAULT), Role::User, UserStatus::Inactive));
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid email or password.');
+
+        (new AuthService($users))->attempt('buyer@example.com', 'secret123');
+    }
+
+    public function testDeactivatedAccountIsNotSignedInAnyMore(): void
+    {
+        $users = $this->createStub(UserRepositoryInterface::class);
+        $users->method('find')->willReturnCallback(static fn (int $id): User => new User($id, 'U', "u{$id}@example.com", 'hash', Role::User, $id === 2 ? UserStatus::Inactive : UserStatus::Active));
+        $service = new AuthService($users);
+
+        self::assertNull($service->find(2), 'an existing session or token stops working');
+        self::assertSame(3, $service->find(3)?->id);
     }
 }

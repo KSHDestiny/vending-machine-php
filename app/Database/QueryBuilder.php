@@ -67,6 +67,17 @@ final class QueryBuilder
     }
 
     /**
+     * Adds a LEFT JOIN on $first = $second, keeping rows without a match.
+     * @return self
+     */
+    public function leftJoin(string $table, string $first, string $second): self
+    {
+        $this->joins[] = 'LEFT JOIN ' . self::identifier($table) . ' ON ' . self::column($first) . ' = ' . self::column($second);
+
+        return $this;
+    }
+
+    /**
      * Adds "column operator ?" with a bound value.
      * @return self
      */
@@ -105,6 +116,24 @@ final class QueryBuilder
 
         $this->wheres[] = self::column($column) . ' LIKE ?';
         $this->bindings[] = '%' . addcslashes($search, '%_\\') . '%';
+
+        return $this;
+    }
+
+    /**
+     * Adds "(a LIKE %search% OR b LIKE %search% ...)" with wildcards escaped; an empty search adds nothing.
+     * @param list<string> $columns
+     * @return self
+     */
+    public function whereContainsAny(array $columns, string $search): self
+    {
+        if ($search === '' || $columns === []) {
+            return $this;
+        }
+
+        $pattern = '%' . addcslashes($search, '%_\\') . '%';
+        $this->wheres[] = '(' . implode(' OR ', array_map(static fn (string $column): string => self::column($column) . ' LIKE ?', $columns)) . ')';
+        array_push($this->bindings, ...array_fill(0, count($columns), $pattern));
 
         return $this;
     }
@@ -149,6 +178,26 @@ final class QueryBuilder
     public function get(): array
     {
         return $this->run($this->selectSql(), $this->bindings);
+    }
+
+    /**
+     * Up to $count matching rows (in the current order).
+     * @return list<array<string, mixed>>
+     */
+    public function take(int $count): array
+    {
+        return $this->run($this->selectSql(' LIMIT ' . max(1, $count)), $this->bindings);
+    }
+
+    /**
+     * The number of matching rows and the exact sum of a column (null when nothing matches).
+     * @return array{count: int, sum: ?string}
+     */
+    public function countAndSum(string $column): array
+    {
+        $rows = $this->run('SELECT COUNT(*) AS aggregate, SUM(' . self::column($column) . ') AS total FROM ' . $this->table . $this->joinSql() . $this->whereSql(), $this->bindings);
+
+        return ['count' => (int) ($rows[0]['aggregate'] ?? 0), 'sum' => isset($rows[0]['total']) ? (string) $rows[0]['total'] : null];
     }
 
     /**

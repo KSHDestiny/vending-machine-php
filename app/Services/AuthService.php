@@ -64,7 +64,8 @@ final class AuthService
 
         $user = $this->users->findByEmail(mb_strtolower(trim($email)));
         $valid = password_verify($password, $user->passwordHash ?? self::DUMMY_HASH);
-        if (!$valid || $user === null) {
+        // A deactivated account fails exactly like a wrong password, so it reveals nothing.
+        if (!$valid || $user === null || !$user->isActive()) {
             throw new AuthenticationException('Invalid email or password.');
         }
 
@@ -72,11 +73,14 @@ final class AuthService
     }
 
     /**
-     * The user with this id, or null (e.g. deleted since they signed in).
+     * The signed-in user with this id, or null if the account is gone or deactivated, so an
+     * existing session or token stops working on the next request.
      * @return User|null
      */
     public function find(int $id): ?User
     {
-        return $this->users->find($id);
+        $user = $this->users->find($id);
+
+        return $user?->isActive() === true ? $user : null;
     }
 }

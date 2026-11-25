@@ -19,3 +19,4 @@ storage/logs/*.log
 docker-compose.yaml
 docker/mysql/
 resources/css/
+.github/

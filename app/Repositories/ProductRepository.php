@@ -6,6 +6,7 @@ namespace App\Repositories;
 
 use App\Database\Database;
 use App\Database\QueryBuilder;
+use App\Enums\ProductStatus;
 use App\Models\Product;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Support\Page;
@@ -27,9 +28,14 @@ final class ProductRepository implements ProductRepositoryInterface
         return self::product($this->forSale()->where('id', $id)->lockForUpdate()->first());
     }
 
-    public function paginate(int $page, int $perPage, string $sort, string $direction, string $search): Page
+    public function paginate(int $page, int $perPage, string $sort, string $direction, string $search, bool $onSaleOnly = false): Page
     {
-        return $this->forSale()
+        $query = $this->forSale();
+        if ($onSaleOnly) {
+            $query->where('status', ProductStatus::Active->value);
+        }
+
+        return $query
             ->whereContains('name', $search)
             ->orderBy($sort, $direction)
             ->orderBy('id')
@@ -44,9 +50,14 @@ final class ProductRepository implements ProductRepositoryInterface
         return $this->find($id) ?? throw new LogicException('Created product not found');
     }
 
-    public function update(int $id, string $name, string $price, int $quantityAvailable): void
+    public function update(int $id, string $name, string $price, ProductStatus $status): void
     {
-        $this->forSale()->where('id', $id)->update(['name' => $name, 'price' => $price, 'quantity_available' => $quantityAvailable]);
+        $this->forSale()->where('id', $id)->update(['name' => $name, 'price' => $price, 'status' => $status->value]);
+    }
+
+    public function setStock(int $id, int $quantity): void
+    {
+        $this->forSale()->where('id', $id)->update(['quantity_available' => $quantity]);
     }
 
     public function delete(int $id): void
@@ -104,6 +115,12 @@ final class ProductRepository implements ProductRepositoryInterface
      */
     private static function toProduct(array $row): Product
     {
-        return new Product((int) $row['id'], (string) $row['name'], (string) $row['price'], (int) $row['quantity_available']);
+        return new Product(
+            (int) $row['id'],
+            (string) $row['name'],
+            (string) $row['price'],
+            (int) $row['quantity_available'],
+            ProductStatus::from((string) ($row['status'] ?? ProductStatus::Active->value)),
+        );
     }
 }

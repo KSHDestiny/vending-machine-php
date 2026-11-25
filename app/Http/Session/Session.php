@@ -15,6 +15,9 @@ final class Session
     /** @var string Key of the one-time flash message. */
     private const FLASH = '_flash';
 
+    /** @var string Session key for a refused form's errors and values (flashForm). */
+    private const FORM = '_form';
+
     public function __construct(private readonly SessionStore $store)
     {
     }
@@ -58,6 +61,34 @@ final class Session
         }
 
         return is_string($message) ? $message : null;
+    }
+
+    /**
+     * Keeps a refused form's errors and submitted values for the next page (post, then redirect),
+     * so reloading that page never resends the form. Never pass passwords in $input.
+     * @param array<string, string> $input
+     * @param array<string, string> $errors
+     * @return void
+     */
+    public function flashForm(string $form, array $input, array $errors): void
+    {
+        $this->store->set(self::FORM, ['form' => $form, 'input' => $input, 'errors' => $errors]);
+    }
+
+    /**
+     * The errors and values kept by flashForm() for this form, removed as they are read; empty otherwise.
+     * @return array{input: array<string, string>, errors: array<string, string>}
+     */
+    public function takeForm(string $form): array
+    {
+        $kept = $this->store->get(self::FORM);
+        if (!is_array($kept) || ($kept['form'] ?? null) !== $form) {
+            return ['input' => [], 'errors' => []];
+        }
+        $this->store->remove(self::FORM);
+        $strings = static fn (mixed $values): array => is_array($values) ? array_map('strval', array_filter($values, 'is_scalar')) : [];
+
+        return ['input' => $strings($kept['input'] ?? []), 'errors' => $strings($kept['errors'] ?? [])];
     }
 
     /**

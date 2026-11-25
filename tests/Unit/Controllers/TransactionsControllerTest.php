@@ -48,14 +48,14 @@ final class TransactionsControllerTest extends TestCase
     public function testUserCannotOpenAnotherUsersPurchase(): void
     {
         $this->app->actingAs(self::user(3));
-        $this->transactions->method('find')->willReturn(self::purchase(userId: 2));
+        $this->transactions->expects(self::once())->method('find')->willReturn(self::purchase(userId: 2));
 
         self::assertSame(404, $this->app->send('GET', '/transactions/7')->status);
     }
 
     public function testBuyerAndAdminCanOpenThePurchaseConfirmation(): void
     {
-        $this->transactions->method('find')->willReturn(self::purchase(userId: 2));
+        $this->transactions->expects(self::exactly(2))->method('find')->willReturn(self::purchase(userId: 2));
 
         $this->app->actingAs(self::user(2));
         self::assertStringContainsString('$13.77', $this->app->send('GET', '/transactions/7')->body);
@@ -123,7 +123,7 @@ final class TransactionsControllerTest extends TestCase
 
     public function testOnlyAdminsSeeAllTransactions(): void
     {
-        $this->transactions->method('paginate')->willReturn(new Page([self::purchase(userId: 2)], 1, 1, 10));
+        $this->transactions->expects(self::once())->method('paginate')->willReturn(new Page([self::purchase(userId: 2)], 1, 1, 10));
         $this->transactions->method('totals')->willReturn(['count' => 1, 'revenue' => '13.770']);
 
         $this->app->actingAs(self::user(2));

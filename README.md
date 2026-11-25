@@ -108,6 +108,10 @@ Send `Authorization: Bearer <token>` with the token returned by register or
 login. Tokens are HS256 JWTs signed with `JWT_SECRET` and expire after one hour;
 the user's role is reloaded from the database on every request.
 
+**Interactive docs:** open [`/docs`](http://localhost:10000/docs) (Swagger UI) to read every
+endpoint and try it: log in with `POST /api/login`, click **Authorize**, paste the token.
+The OpenAPI 3 document is at `/openapi.json`; a test keeps it in sync with the routes.
+
 | Method | Path | Access |
 | --- | --- | --- |
 | `POST` | `/api/register`, `/api/login` | Public; returns a token |

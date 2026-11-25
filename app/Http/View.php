@@ -44,6 +44,16 @@ final class View
     }
 
     /**
+     * An HTML response with the template as the whole page, without the app layout (e.g. the API docs).
+     * @param array<string, mixed> $data
+     * @return Response
+     */
+    public function standalone(string $template, array $data = []): Response
+    {
+        return Response::html($this->capture($template, $data));
+    }
+
+    /**
      * Sets the path of the request being handled; the Kernel calls this first.
      * @return void
      */

@@ -80,6 +80,7 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
         $sessionAuth,
         $session,
         new Controllers\HealthController($database, $logger),
+        new Controllers\DocsController($view),
         new Controllers\AuthController($authService, $sessionAuth, $session, $view),
         new Controllers\AccountController($accountService, $sessionAuth, $session, $view),
         new Controllers\ProductsController($productService, $purchaseService, $inventoryService, $sessionAuth, $session, $view),

@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ProductStatus;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ValidationException;
 use App\Support\Validator;
 use LogicException;
 
 /*
- * A product for sale, with the rules about its own stock and price: whether it
+ * A product, with the rules about its own stock and price: whether it is on sale and
  * can supply a quantity, and the exact total for buying it.
  */
 final class Product
@@ -21,7 +22,17 @@ final class Product
         /** @var string DECIMAL(10,3) as an exact string, e.g. "6.885". */
         public readonly string $price,
         public readonly int $quantityAvailable,
+        public readonly ProductStatus $status = ProductStatus::Active,
     ) {
+    }
+
+    /**
+     * Whether customers can see and buy it.
+     * @return bool
+     */
+    public function isOnSale(): bool
+    {
+        return $this->status === ProductStatus::Active;
     }
 
     /**
@@ -43,11 +54,14 @@ final class Product
     }
 
     /**
-     * Throws if the quantity is below 1 or more than the stock; nothing is sold then.
+     * Throws if the product is off sale, or the quantity is below 1 or more than the stock; nothing is sold then.
      * @return void
      */
     public function ensureCanSupply(int $quantity): void
     {
+        if (!$this->isOnSale()) {
+            throw new ValidationException(['quantity' => 'This product is not on sale.']);
+        }
         if ($quantity < 1) {
             throw new ValidationException(['quantity' => 'Quantity must be at least 1.']);
         }
@@ -77,10 +91,10 @@ final class Product
 
     /**
      * The product as API fields; the price stays a string so no precision is lost.
-     * @return array{id: int, name: string, price: string, quantity_available: int}
+     * @return array{id: int, name: string, price: string, quantity_available: int, status: string}
      */
     public function toArray(): array
     {
-        return ['id' => $this->id, 'name' => $this->name, 'price' => $this->price, 'quantity_available' => $this->quantityAvailable];
+        return ['id' => $this->id, 'name' => $this->name, 'price' => $this->price, 'quantity_available' => $this->quantityAvailable, 'status' => $this->status->value];
     }
 }

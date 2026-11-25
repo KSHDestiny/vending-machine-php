@@ -11,8 +11,10 @@ use App\Models\Product;
 use App\Enums\Role;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Repositories\Contracts\InventoryRepositoryInterface;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
+use App\Services\InventoryService;
 use App\Services\PurchaseService;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\ImmediateTransactions;
@@ -29,7 +31,7 @@ final class PurchaseServiceTest extends TestCase
             ->with(5, 2, 3, '6.885', '20.655')
             ->willReturn(new Transaction(1, 5, 2, 3, '6.885', '20.655', 'now'));
 
-        (new PurchaseService($products, $transactions, new ImmediateTransactions()))->purchase(self::buyer(), 2, '3');
+        (new PurchaseService($products, $transactions, $this->inventory($products), new ImmediateTransactions()))->purchase(self::buyer(), 2, '3');
     }
 
     public function testGuestCannotPurchase(): void
@@ -46,7 +48,7 @@ final class PurchaseServiceTest extends TestCase
 
         $this->expectException(NotFoundException::class);
 
-        (new PurchaseService($products, $this->createStub(TransactionRepositoryInterface::class), new ImmediateTransactions()))->purchase(self::buyer(), 99, '1');
+        (new PurchaseService($products, $this->createStub(TransactionRepositoryInterface::class), $this->inventory($products), new ImmediateTransactions()))->purchase(self::buyer(), 99, '1');
     }
 
     public function testOrderTotalLargerThanTheColumnIsRejected(): void
@@ -56,7 +58,7 @@ final class PurchaseServiceTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        (new PurchaseService($products, $this->createStub(TransactionRepositoryInterface::class), new ImmediateTransactions()))->purchase(self::buyer(), 2, '2');
+        (new PurchaseService($products, $this->createStub(TransactionRepositoryInterface::class), $this->inventory($products), new ImmediateTransactions()))->purchase(self::buyer(), 2, '2');
     }
 
     /**
@@ -65,7 +67,9 @@ final class PurchaseServiceTest extends TestCase
      */
     private function service(): PurchaseService
     {
-        return new PurchaseService($this->createStub(ProductRepositoryInterface::class), $this->createStub(TransactionRepositoryInterface::class), new ImmediateTransactions());
+        $products = $this->createStub(ProductRepositoryInterface::class);
+
+        return new PurchaseService($products, $this->createStub(TransactionRepositoryInterface::class), $this->inventory($products), new ImmediateTransactions());
     }
 
     /**
@@ -75,5 +79,14 @@ final class PurchaseServiceTest extends TestCase
     private static function buyer(): User
     {
         return new User(5, 'Buyer', 'buyer@example.com', 'hash', Role::User);
+    }
+
+    /**
+     * Inventory on the same product repository, with movements going nowhere.
+     * @return InventoryService
+     */
+    private function inventory(ProductRepositoryInterface $products): InventoryService
+    {
+        return new InventoryService($products, $this->createStub(InventoryRepositoryInterface::class), new ImmediateTransactions());
     }
 }

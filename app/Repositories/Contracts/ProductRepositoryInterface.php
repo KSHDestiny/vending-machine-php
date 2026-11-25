@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories\Contracts;
 
+use App\Enums\ProductStatus;
 use App\Models\Product;
 use App\Support\Page;
 
@@ -30,7 +31,7 @@ interface ProductRepositoryInterface
      * @param 'asc'|'desc' $direction
      * @return Page<Product>
      */
-    public function paginate(int $page, int $perPage, string $sort, string $direction, string $search): Page;
+    public function paginate(int $page, int $perPage, string $sort, string $direction, string $search, bool $onSaleOnly = false): Page;
 
     /**
      * The new product.
@@ -39,10 +40,17 @@ interface ProductRepositoryInterface
     public function create(string $name, string $price, int $quantityAvailable): Product;
 
     /**
-     * Replaces the product's name, price and stock.
+     * Replaces the product's name, price and status; stock only changes through setStock().
      * @return void
      */
-    public function update(int $id, string $name, string $price, int $quantityAvailable): void;
+    public function update(int $id, string $name, string $price, ProductStatus $status): void;
+
+    /**
+     * Sets the stock; only InventoryService calls this, inside the transaction that locked the row
+     * and recorded the movement.
+     * @return void
+     */
+    public function setStock(int $id, int $quantity): void;
 
     /**
      * Soft-deletes the product, so its transactions keep pointing at it.

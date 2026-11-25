@@ -8,6 +8,8 @@ use App\Models\Product;
 use App\Enums\Role;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Enums\ProductStatus;
+use App\Repositories\Contracts\InventoryRepositoryInterface;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
@@ -37,7 +39,7 @@ final class ProductsControllerTest extends TestCase
         $users = $this->createStub(UserRepositoryInterface::class);
         $users->method('find')->willReturnCallback(static fn (int $id): ?User => [1 => self::admin(), 2 => self::customer()][$id] ?? null);
 
-        $this->app = new Application(['products' => $this->products, 'transactions' => $this->transactions, 'users' => $users, 'transactionManager' => new ImmediateTransactions()]);
+        $this->app = new Application(['products' => $this->products, 'transactions' => $this->transactions, 'users' => $users, 'inventory' => $this->createStub(InventoryRepositoryInterface::class), 'transactionManager' => new ImmediateTransactions()]);
     }
 
     public function testProductListNeedsATokenAndReturnsJsonWithPagination(): void
@@ -50,9 +52,22 @@ final class ProductsControllerTest extends TestCase
 
         self::assertSame(200, $response->status);
         self::assertSame([
-            'data' => [['id' => 2, 'name' => 'Pepsi', 'price' => '6.885', 'quantity_available' => 4]],
+            'data' => [['id' => 2, 'name' => 'Pepsi', 'price' => '6.885', 'quantity_available' => 4, 'status' => 'active']],
             'meta' => ['page' => 1, 'per_page' => 10, 'total' => 1, 'last_page' => 1],
         ], Application::json($response));
+    }
+
+    public function testOnlyAdminTokensListProductsOffSale(): void
+    {
+        $this->transactions->expects(self::never())->method('create');
+        $this->products->expects(self::exactly(2))
+            ->method('paginate')
+            ->willReturnCallback(static function (int $page, int $perPage, string $sort, string $direction, string $search, bool $onSaleOnly): Page {
+                return new Page($onSaleOnly ? [] : [new Product(3, 'Old Cola', '1.000', 0, ProductStatus::Inactive)], $onSaleOnly ? 0 : 1, 1, 10);
+            });
+
+        self::assertSame([], Application::json($this->app->api('GET', '/api/products', $this->app->tokenFor(self::customer())))['data']);
+        self::assertCount(1, Application::json($this->app->api('GET', '/api/products', $this->app->tokenFor(self::admin())))['data']);
     }
 
     public function testManagingProductsNeedsAnAdminToken(): void

@@ -17,7 +17,7 @@ use App\Support\Validator;
 /*
  * Buying a product. The stock check and the stock update happen on a row locked
  * with SELECT ... FOR UPDATE inside one transaction, so two buyers can never both
- * take the last item. The price is always read from the database, never the request.
+ * take the last item. The sale and its inventory movement are recorded in that transaction too. The price is always read from the database, never the request.
  */
 final class PurchaseService
 {
@@ -27,6 +27,7 @@ final class PurchaseService
     public function __construct(
         private readonly ProductRepositoryInterface $products,
         private readonly TransactionRepositoryInterface $transactions,
+        private readonly InventoryService $inventory,
         private readonly TransactionManager $database,
     ) {
     }
@@ -54,8 +55,10 @@ final class PurchaseService
             $total = $product->totalFor($quantity);
 
             $this->products->decrementStock($product->id, $quantity);
+            $transaction = $this->transactions->create($buyer->id, $product->id, $quantity, $product->price, $total);
+            $this->inventory->recordPurchase($buyer, $product, $quantity, $transaction->id);
 
-            return $this->transactions->create($buyer->id, $product->id, $quantity, $product->price, $total);
+            return $transaction;
         });
     }
 

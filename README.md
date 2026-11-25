@@ -33,6 +33,12 @@ their purchase history. The same rules are available as a JWT-secured REST API.
   and a symbol (at most 72 bytes).
 - **Security:** CSRF tokens on browser forms, escaped HTML output, prepared
   statements, HttpOnly/SameSite session cookies and session renewal on login.
+- **Stock history:** every stock change is recorded (initial stock, restock,
+  purchase, adjustment) with the stock before and after, who made it and why, in
+  the same transaction as the change. Admins restock from each product's stock
+  page; editing the quantity on the product form is recorded as an adjustment.
+- **On sale / off sale:** admins can take a product off sale without deleting it;
+  customers then no longer see it (web or API) and cannot buy it.
 - **Sessions in MySQL:** sign-ins survive restarts and redeploys. Only a SHA-256
   hash of each session ID is stored; sessions end after 2 hours idle or 12 hours
   after sign-in. Logout deletes the session, a password change signs out the
@@ -43,8 +49,9 @@ their purchase history. The same rules are available as a JWT-secured REST API.
 | Table | Columns | Notes |
 | --- | --- | --- |
 | `users` | id, name, email (unique), password (hash), role (`admin`/`user`), status (`active`/`inactive`), deactivated_at, timestamps | Plain passwords are never stored. Deactivated accounts keep their purchases. |
-| `products` | id, name, price `DECIMAL(10,3)`, quantity_available (unsigned), timestamps, deleted_at | Deleting a product is a soft delete, so purchase history keeps it. |
+| `products` | id, name, price `DECIMAL(10,3)`, quantity_available (unsigned), status (`active`/`inactive`), timestamps, deleted_at | Deleting a product is a soft delete, so purchase history keeps it. |
 | `transactions` | id, user_id → users, product_id → products, quantity, unit_price, total_price, created_at | Stores the price at purchase time. Foreign keys restrict deletes; a check keeps `total_price = unit_price × quantity`. |
+| `inventory_movements` | id, product_id, user_id, transaction_id, movement_type, quantity_change, quantity_before, quantity_after, reason, created_at | Append-only stock history; a CHECK keeps before + change = after. |
 | `sessions` | id (SHA-256 of the session ID), user_id → users, payload, last_activity, created_at | Web sessions; deleted with the user's account by cascade. |
 
 Migrations are in `database/migrations/` and seeders in `database/seeders/`.
@@ -93,7 +100,7 @@ tests; it is created only when the MySQL volume is new.
 | Guests | `/login`, `/register` |
 | Signed in | `/products` (search, sort, pages), `/products/{id}`, `/account` |
 | Customers | Buy from `/products/{id}`, see `/my-transactions` and each confirmation |
-| Admins | `/admin` dashboard with a 7/14/30-day sales trend, `/admin/products` (add, edit, delete), `/admin/transactions`, `/admin/users` (search, filter, change role, activate or deactivate) |
+| Admins | `/admin` dashboard with a 7/14/30-day sales trend, `/admin/products` (add, edit, delete, on/off sale, `/admin/products/{id}/inventory` stock history and restock), `/admin/transactions`, `/admin/users` (search, filter, change role, activate or deactivate) |
 
 ## REST API
 

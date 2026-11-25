@@ -7,8 +7,10 @@ namespace Tests\Integration;
 use App\Enums\Role;
 use App\Exceptions\InsufficientStockException;
 use App\Models\User;
+use App\Repositories\InventoryRepository;
 use App\Repositories\ProductRepository;
 use App\Repositories\TransactionRepository;
+use App\Services\InventoryService;
 use App\Services\PurchaseService;
 use PDOException;
 use Tests\Support\DatabaseTestCase;
@@ -29,7 +31,9 @@ final class PurchaseTransactionTest extends DatabaseTestCase
             'user' => (string) getenv('DB_USER'),
             'password' => (string) getenv('DB_PASSWORD'),
         ]);
-        $service = new App\Services\PurchaseService(new App\Repositories\ProductRepository($database), new App\Repositories\TransactionRepository($database), $database);
+        $products = new App\Repositories\ProductRepository($database);
+        $inventory = new App\Services\InventoryService($products, new App\Repositories\InventoryRepository($database), $database);
+        $service = new App\Services\PurchaseService($products, new App\Repositories\TransactionRepository($database), $inventory, $database);
         $buyer = new App\Models\User((int) $argv[2], 'Buyer', 'buyer@example.com', 'hash', App\Enums\Role::User);
         $database->pdo();
         echo "ready\n";
@@ -114,6 +118,7 @@ final class PurchaseTransactionTest extends DatabaseTestCase
         self::assertSame([...array_fill(0, 5, InsufficientStockException::class), 'ok'], $results);
         self::assertSame(0, $this->stockOf($product->id));
         self::assertSame(1, $this->database->table('transactions')->count());
+        self::assertSame(1, $this->database->table('inventory_movements')->where('movement_type', 'PURCHASE')->count(), 'exactly one purchase movement');
     }
 
     /**
@@ -122,7 +127,9 @@ final class PurchaseTransactionTest extends DatabaseTestCase
      */
     private function purchases(): PurchaseService
     {
-        return new PurchaseService(new ProductRepository($this->database), new TransactionRepository($this->database), $this->database);
+        $products = new ProductRepository($this->database);
+
+        return new PurchaseService($products, new TransactionRepository($this->database), new InventoryService($products, new InventoryRepository($this->database), $this->database), $this->database);
     }
 
     /**

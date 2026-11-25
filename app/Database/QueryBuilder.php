@@ -67,6 +67,17 @@ final class QueryBuilder
     }
 
     /**
+     * Adds a LEFT JOIN on $first = $second, keeping rows without a match.
+     * @return self
+     */
+    public function leftJoin(string $table, string $first, string $second): self
+    {
+        $this->joins[] = 'LEFT JOIN ' . self::identifier($table) . ' ON ' . self::column($first) . ' = ' . self::column($second);
+
+        return $this;
+    }
+
+    /**
      * Adds "column operator ?" with a bound value.
      * @return self
      */

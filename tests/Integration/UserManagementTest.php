@@ -8,6 +8,7 @@ use App\Database\Database;
 use App\Enums\Role;
 use App\Enums\UserStatus;
 use App\Exceptions\ValidationException;
+use App\Repositories\SessionRepository;
 use App\Repositories\TransactionRepository;
 use App\Repositories\UserRepository;
 use App\Services\UserManagementService;
@@ -62,14 +63,14 @@ final class UserManagementTest extends DatabaseTestCase
     {
         $first = $this->createUser(Role::Admin, 'first@example.com');
         $second = $this->createUser(Role::Admin, 'second@example.com');
-        $service = fn (Database $database): UserManagementService => new UserManagementService(new UserRepository($database), new TransactionRepository($database), $database);
+        $service = fn (Database $database): UserManagementService => new UserManagementService(new UserRepository($database), new TransactionRepository($database), new SessionRepository($database), $database);
 
         // Two connections: the first demotes the second inside an open transaction, so its
         // lock is held while the second tries to demote the first.
         $other = Database::fromConfig(self::config());
         $other->pdo()->exec('SET SESSION innodb_lock_wait_timeout = 2');
         $this->database->pdo()->beginTransaction();
-        (new UserManagementService(new UserRepository($this->database), new TransactionRepository($this->database), new ImmediateTransactions()))
+        (new UserManagementService(new UserRepository($this->database), new TransactionRepository($this->database), new SessionRepository($this->database), new ImmediateTransactions()))
             ->changeRole($first, $second->id, 'user');
 
         try {

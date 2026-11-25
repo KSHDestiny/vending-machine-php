@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Exceptions\ValidationException;
 use App\Models\User;
+use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Support\Validator;
 use LogicException;
@@ -23,8 +24,10 @@ final class AccountService
         'password_confirmation' => ['label' => 'Password confirmation', 'rules' => ['required', 'same:password']],
     ];
 
-    public function __construct(private readonly UserRepositoryInterface $users)
-    {
+    public function __construct(
+        private readonly UserRepositoryInterface $users,
+        private readonly SessionRepositoryInterface $sessions,
+    ) {
     }
 
     /**
@@ -43,7 +46,8 @@ final class AccountService
     }
 
     /**
-     * Sets a new password after checking the current one; throws ValidationException otherwise.
+     * Sets a new password after checking the current one, and signs the user out of every
+     * stored web session (the caller starts a fresh one); throws ValidationException otherwise.
      * @param array<string, string> $input current_password, password, password_confirmation
      * @return void
      */
@@ -56,5 +60,6 @@ final class AccountService
         }
 
         $this->users->updatePassword($user->id, password_hash($input['password'], PASSWORD_DEFAULT));
+        $this->sessions->deleteForUser($user->id);
     }
 }

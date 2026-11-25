@@ -70,10 +70,12 @@ Migrations are in `database/migrations/` and seeders in `database/seeders/`.
 ```text
 app/
   Controllers/        Web controllers (ProductsController, ...) and Api/ JSON controllers
-  Services/           Business rules shared by web and API (purchase, products, auth)
+  Services/           Business rules shared by web and API (purchase, products, inventory,
+                      users, auth, dashboard)
   Repositories/       PDO queries behind interfaces (mocked in unit tests)
-  Models/ Enums/      Product, User, Transaction, Role
-  Http/ Middleware/   Request/response, attribute router, sessions, auth and CSRF
+  Models/ Enums/      Product, User, Transaction, InventoryMovement, Role, statuses
+  Auth/               Session and token sign-in, login cooldown
+  Http/ Middleware/   Request/response, attribute router, sessions, CSRF, OpenAPI document
   Database/           PDO connection, transactions, query builder, migrator
 bootstrap/app.php     Wires every object by constructor injection
 routes/               Registers the controllers and names the middleware
@@ -145,7 +147,7 @@ curl -s localhost:10000/api/products/2/purchase -H "Authorization: Bearer $TOKEN
 ## Tests and static analysis
 
 ```sh
-docker compose exec app composer test:unit       # 54 unit tests, no database
+docker compose exec app composer test:unit       # 116 unit tests, no database
 docker compose exec app composer analyse         # PHPStan
 docker compose exec app composer test            # unit + integration tests
 ```
@@ -153,10 +155,14 @@ docker compose exec app composer test            # unit + integration tests
 - **Unit tests** send requests through the real routes, middleware and
   controllers with mocked repositories (dependency injection), so they need no
   database. They cover product CRUD, admin-only access, CSRF, validation, prices
-  taken from the database, JWT and the router.
-- **Integration tests** run purchases against MySQL: insufficient stock changes
-  nothing, a failed recording rolls back the stock, and six buyers racing for
-  the last item produce exactly one sale.
+  taken from the database, user management rules, the login cooldown, the
+  post-then-redirect forms, security headers, JWT, the router, and the API docs
+  matching the routes.
+- **Integration tests** (20) run against MySQL: insufficient stock changes
+  nothing, a failed recording rolls back the stock, six buyers racing for the
+  last item produce exactly one sale, every stock change adds up in the history,
+  transaction filters and totals, stored sessions and their timeouts, and two
+  admins demoting each other cannot remove the last admin.
 
 **Continuous integration:** GitHub Actions (`.github/workflows/ci.yml`) runs on
 every pull request and on pushes to `main` and `develop`. It checks for

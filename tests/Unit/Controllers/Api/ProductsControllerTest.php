@@ -44,7 +44,8 @@ final class ProductsControllerTest extends TestCase
 
     public function testProductListNeedsATokenAndReturnsJsonWithPagination(): void
     {
-        $this->products->method('paginate')->willReturn(new Page([new Product(2, 'Pepsi', '6.885', 4)], 1, 1, 10));
+        $this->transactions->expects(self::never())->method('create');
+        $this->products->expects(self::once())->method('paginate')->willReturn(new Page([new Product(2, 'Pepsi', '6.885', 4)], 1, 1, 10));
 
         self::assertSame(401, $this->app->api('GET', '/api/products')->status);
 
@@ -72,6 +73,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testManagingProductsNeedsAnAdminToken(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->products->expects(self::never())->method('create');
         $body = ['name' => 'Tea', 'price' => '1.25', 'quantity_available' => 3];
 
@@ -82,6 +84,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testAdminCreatesAProduct(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->products->expects(self::once())->method('create')->with('Tea', '1.25', 3)->willReturn(new Product(9, 'Tea', '1.250', 3));
 
         // JSON numbers, as an API client would send them.
@@ -93,6 +96,8 @@ final class ProductsControllerTest extends TestCase
 
     public function testValidationErrorsAreJson422(): void
     {
+        $this->transactions->expects(self::never())->method('create');
+        $this->products->expects(self::never())->method('create');
         $response = $this->app->api('POST', '/api/products', $this->app->tokenFor(self::admin()), ['name' => '', 'price' => -1, 'quantity_available' => 1.5]);
 
         self::assertSame(422, $response->status);
@@ -101,7 +106,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testPurchaseUsesTheDatabasePriceNotTheRequest(): void
     {
-        $this->products->method('findForUpdate')->willReturn(new Product(2, 'Pepsi', '6.885', 5));
+        $this->products->expects(self::once())->method('findForUpdate')->willReturn(new Product(2, 'Pepsi', '6.885', 5));
         $this->transactions->expects(self::once())
             ->method('create')
             ->with(2, 2, 'Pepsi', 2, '6.885', '13.770')
@@ -115,7 +120,8 @@ final class ProductsControllerTest extends TestCase
 
     public function testMissingProductIsJson404(): void
     {
-        $this->products->method('find')->willReturn(null);
+        $this->transactions->expects(self::never())->method('create');
+        $this->products->expects(self::once())->method('find')->willReturn(null);
 
         $response = $this->app->api('GET', '/api/products/99', $this->app->tokenFor(self::customer()));
 

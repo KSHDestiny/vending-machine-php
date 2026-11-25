@@ -51,6 +51,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testProductListReturnsTheProductsWithSearchSortAndPaging(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->products->expects(self::once())
             ->method('paginate')
             ->with(2, 10, 'price', 'desc', 'pep', true)
@@ -66,6 +67,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testUnknownSortColumnsFallBackToName(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->products->expects(self::once())->method('paginate')->with(1, 10, 'name', 'asc', '')->willReturn(new Page([], 0, 1, 10));
 
         $this->app->actingAs(self::customer());
@@ -74,6 +76,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testGuestsMustLogInToSeeProducts(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->products->expects(self::never())->method('paginate');
         $this->products->expects(self::never())->method('find');
 
@@ -86,7 +89,8 @@ final class ProductsControllerTest extends TestCase
 
     public function testMissingProductReturnsNotFound(): void
     {
-        $this->products->method('find')->willReturn(null);
+        $this->transactions->expects(self::never())->method('create');
+        $this->products->expects(self::once())->method('find')->with(99)->willReturn(null);
 
         $this->app->actingAs(self::customer());
         $response = $this->app->send('GET', '/products/99');
@@ -138,6 +142,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testProductCreationSucceedsWithValidInput(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->expects(self::once())->method('create')->with('Tea', '1.250', 3)->willReturn(new Product(9, 'Tea', '1.250', 3));
 
@@ -149,6 +154,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testInvalidPriceIsRejected(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->expects(self::never())->method('create');
 
@@ -162,6 +168,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testNegativeInventoryIsRejected(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->expects(self::never())->method('create');
 
@@ -173,6 +180,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testProductUpdateWorks(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->method('find')->willReturn(self::pepsi());
         $this->products->method('findForUpdate')->willReturn(self::pepsi());
@@ -186,6 +194,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testProductDeletionWorks(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->method('find')->willReturn(self::pepsi());
         $this->products->expects(self::once())->method('delete')->with(2);
@@ -195,6 +204,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testNonAdminCannotManageProducts(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::customer());
         $this->products->expects(self::never())->method('create');
 
@@ -206,6 +216,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testFormPostWithoutCsrfTokenIsRejected(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->expects(self::never())->method('create');
 
@@ -248,6 +259,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testZeroOrNegativePurchaseQuantityIsRejected(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::customer());
         $this->products->method('find')->willReturn(self::pepsi());
         $this->products->expects(self::never())->method('findForUpdate');
@@ -261,6 +273,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testUnauthenticatedPurchaseIsRejected(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->products->expects(self::never())->method('findForUpdate');
 
         $response = $this->app->submit('POST', '/products/2/purchase', ['quantity' => '1']);
@@ -271,6 +284,7 @@ final class ProductsControllerTest extends TestCase
 
     public function testAdminCannotPurchase(): void
     {
+        $this->transactions->expects(self::never())->method('create');
         $this->app->actingAs(self::admin());
         $this->products->expects(self::never())->method('findForUpdate');
 

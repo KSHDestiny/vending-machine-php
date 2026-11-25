@@ -1,5 +1,7 @@
 # Vending Machine (Core PHP)
 
+[![CI](https://github.com/KSHDestiny/vending-machine-php/actions/workflows/ci.yml/badge.svg)](https://github.com/KSHDestiny/vending-machine-php/actions/workflows/ci.yml)
+
 A vending machine system in plain PHP 8.4 (no framework) with MySQL 8.4, Apache
 and Docker. Admins manage products and stock; customers buy products and see
 their purchase history. The same rules are available as a JWT-secured REST API.
@@ -124,6 +126,13 @@ docker compose exec app composer test            # unit + integration tests
 - **Integration tests** run purchases against MySQL: insufficient stock changes
   nothing, a failed recording rolls back the stock, and six buyers racing for
   the last item produce exactly one sale.
+
+**Continuous integration:** GitHub Actions (`.github/workflows/ci.yml`) runs on
+every pull request and on pushes to `main` and `develop`. It checks for
+committed secrets, validates Composer and audits dependencies, lints every PHP
+file, runs the unit tests with coverage (uploaded as an artifact) and PHPStan,
+migrates and seeds a MySQL 8.4 service twice to prove both are repeatable, runs
+the integration tests, smoke-tests the app, and builds the Docker image.
 
 > **Warning:** the integration tests empty the tables of the database named by
 > `DB_TEST_NAME` before each test. They refuse to run unless `DB_NAME` is set

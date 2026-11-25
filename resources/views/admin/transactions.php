@@ -14,11 +14,11 @@ $export = '<a href="/admin/transactions/export' . $e($query === [] ? '' : '?' . 
 ?>
 <?= $partial('page-header', ['title' => 'Transactions', 'description' => 'Every purchase, newest first.', 'actions' => $export]) ?>
 
-<form method="get" action="/admin/transactions" class="mt-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5" role="search" aria-label="Filter transactions">
-    <label class="block text-xs font-medium text-slate-600">Customer
+<form method="get" action="/admin/transactions" class="mt-6 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-5" role="search" aria-label="Filter transactions">
+    <label class="col-span-2 block text-xs font-medium text-slate-600 sm:col-span-1">Customer
         <input type="search" name="customer" value="<?= $e($filter->customer) ?>" placeholder="Name or email" maxlength="100" class="mt-1 block w-full <?= $input ?>">
     </label>
-    <label class="block text-xs font-medium text-slate-600">Product
+    <label class="col-span-2 block text-xs font-medium text-slate-600 sm:col-span-1">Product
         <input type="search" name="product" value="<?= $e($filter->product) ?>" placeholder="Product name" maxlength="100" class="mt-1 block w-full <?= $input ?>">
     </label>
     <label class="block text-xs font-medium text-slate-600">From
@@ -27,7 +27,7 @@ $export = '<a href="/admin/transactions/export' . $e($query === [] ? '' : '?' . 
     <label class="block text-xs font-medium text-slate-600">To
         <input type="date" name="to" value="<?= $e($filter->to?->format('Y-m-d')) ?>" class="mt-1 block w-full <?= $input ?>">
     </label>
-    <div class="flex items-end gap-2">
+    <div class="col-span-2 flex items-end gap-2 lg:col-span-1">
         <button type="submit" class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"><?= $partial('icon', ['name' => 'search', 'class' => 'h-4 w-4']) ?>Filter</button>
         <?php if ($filter->isActive()): ?><a href="/admin/transactions" class="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Clear</a><?php endif ?>
     </div>

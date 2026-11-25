@@ -1,57 +1,151 @@
-# Vending Machine (Core PHP)
+<div align="center">
+
+# Vending Machine
+
+**A complete vending machine system in plain PHP 8.4: no framework, just PDO, MySQL and clean architecture.**
 
 [![CI](https://github.com/KSHDestiny/vending-machine-php/actions/workflows/ci.yml/badge.svg)](https://github.com/KSHDestiny/vending-machine-php/actions/workflows/ci.yml)
+![PHP 8.4](https://img.shields.io/badge/PHP-8.4-777BB4?logo=php&logoColor=white)
+![MySQL 8.4](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![PHPStan level 8](https://img.shields.io/badge/PHPStan-level%208-brightgreen)
+![Tests](https://img.shields.io/badge/tests-116%20unit%20%2B%2020%20integration-success)
 
-A vending machine system in plain PHP 8.4 (no framework) with MySQL 8.4, Apache
-and Docker. Admins manage products and stock; customers buy products and see
-their purchase history. The same rules are available as a JWT-secured REST API.
+**[Live demo](https://web-production-d5f8dfd1.up.railway.app/login)** ·
+**[API docs (Swagger)](https://web-production-d5f8dfd1.up.railway.app/docs)** ·
+[Run locally](#run-locally) ·
+[API](#rest-api) ·
+[Tests](#tests-and-ci)
+
+</div>
+
+---
+
+Admins manage products, stock and users; customers buy products and see their purchase
+history. Every purchase is a single locked database transaction, so stock can never be
+oversold, and prices are exact decimals (Pepsi stays **$6.885**). The same rules are
+available as a JWT-secured REST API with interactive docs.
+
+> **Try it:** register a customer account on the [live demo](https://web-production-d5f8dfd1.up.railway.app/register)
+> and buy something. Admin credentials for reviewers are sent separately.
+
+## Screenshots
+
+| Admin dashboard | Storefront |
+| --- | --- |
+| <img src="https://gist.githubusercontent.com/KSHDestiny/2f81bda88fa9621b5aae4f4484a0130a/raw/5d25767089859280de51bcd9c54ec2b96e461087/after-10-admin-dashboard.png" alt="Admin dashboard with KPI cards, sales trend and inventory warnings" width="420"> | <img src="https://gist.githubusercontent.com/KSHDestiny/570fb844a925e994f43e88f5c4d6732d/raw/0a72b31ec1894644d15f00bde667c3dd7db06865/06-storefront.png" alt="Customer storefront" width="420"> |
+| **Stock history** | **User management** |
+| <img src="https://gist.githubusercontent.com/KSHDestiny/570fb844a925e994f43e88f5c4d6732d/raw/1cb1297f9f31a225eef6ccdf62bd99f0f0c9d177/07-history-with-purchase.png" alt="Stock history for a product" width="420"> | <img src="https://gist.githubusercontent.com/KSHDestiny/93585651f9e4149df02aee90f69848e8/raw/ec6d5bc153122f9fa4cd225d3a0b1c3074592e57/01-users-list.png" alt="Admin users list" width="420"> |
+| **Transactions: filters and CSV export** | **Interactive API docs** |
+| <img src="https://gist.githubusercontent.com/KSHDestiny/abc2ce591da2964c6b110daf2a630014/raw/e649d69cd92acf5ece3d52dbe48648cedae99dbd/03-filter-product-dates.png" alt="Transactions filtered by product and dates" width="420"> | <img src="https://gist.githubusercontent.com/KSHDestiny/09b94f2334e18c28cf39d0de21619d1b/raw/23f51a89cf02220a0a732693a017feec0a720b39/01-docs-overview.png" alt="Swagger UI API docs" width="420"> |
+
+<p align="center"><img src="https://gist.githubusercontent.com/KSHDestiny/2f81bda88fa9621b5aae4f4484a0130a/raw/a24dd2ba23ca54aaca1b513bb94ab4068a7ec62c/after-mobile-products.png" alt="Products on a phone" width="200"> &nbsp; <img src="https://gist.githubusercontent.com/KSHDestiny/93585651f9e4149df02aee90f69848e8/raw/613c02feccfaabe6d694e30ffa97796cfab05b3e/10-user-detail-phone.png" alt="User page on a phone" width="200"><br><sub>Works on phones: the sidebar becomes a menu and wide tables become cards.</sub></p>
+
+## Contents
+
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Architecture](#architecture)
+- [Database design](#database-design)
+- [Run locally](#run-locally)
+- [Web pages](#web-pages)
+- [REST API](#rest-api)
+- [Tests and CI](#tests-and-ci)
+- [Deployment (Railway)](#deployment-railway)
+- [Known limitations](#known-limitations)
 
 ## Features
 
-- **Products:** ID, name, price (`DECIMAL(10,3)`, so Pepsi stays `6.885`) and
-  available quantity. Coke `3.99`, Pepsi `6.885` and Water `0.5` are seeded.
-- **Authentication:** PHP sessions and `password_hash()` for the web; registration
-  always creates a customer. The admin account comes from the seeder.
-- **Role-based access:** checked on the server for every request. Only admins can
-  manage products; only customers can buy.
-- **User management:** admins search and filter accounts, change roles and
-  deactivate or reactivate them. Deactivated accounts cannot sign in, and an open
-  session or API token stops working on the next request. Admins cannot change
-  their own account, and the last active admin can be neither demoted nor
-  deactivated (the admin rows are locked, so two admins acting at once cannot
-  bypass this).
-- **Purchasing:** one database transaction locks the product row, checks stock,
-  decrements it and records the purchase at the database price. A failure rolls
-  everything back, and competing buyers cannot oversell.
-- **Product list:** search, sorting by name, price or stock, and pagination
-  (10 per page).
-- **Attribute routing:** every route is a `#[Route]` attribute on its controller
-  method, including `POST /products/{id}/purchase`.
-- **Validation:** server-side for every input, mirrored in the browser. Price
-  must be positive with up to 3 decimals; stock must be a whole number of 0 or
-  more. Passwords need 8+ characters with upper and lowercase letters, a number
-  and a symbol (at most 72 bytes).
-- **Security:** CSRF tokens on browser forms, escaped HTML output, prepared
-  statements, HttpOnly/SameSite session cookies and session renewal on login.
-- **Security headers:** a Content-Security-Policy on every response (only the
-  site's own scripts; `/docs` also allows the pinned Swagger UI files and its one
-  inline script by hash), `Permissions-Policy`, and HSTS in production.
-- **Login cooldown:** the 5th wrong password in a row makes the server refuse web
-  logins from that session for 30 seconds, checked before the password, with a
-  countdown on the form. It is kept in the session, so no extra table or file.
-- **Post, then redirect:** every web form redirects after it is sent, on success and
-  on errors alike. Errors and the values entered (never passwords) are shown once on
-  the page it redirects to, so reloading a page never resends a form or a purchase.
-- **Stock history:** every stock change is recorded (initial stock, restock,
-  purchase, adjustment) with the stock before and after, who made it and why, in
-  the same transaction as the change. Admins restock from each product's stock
-  page; editing the quantity on the product form is recorded as an adjustment.
-- **On sale / off sale:** admins can take a product off sale without deleting it;
-  customers then no longer see it (web or API) and cannot buy it.
-- **Sessions in MySQL:** sign-ins survive restarts and redeploys. Only a SHA-256
-  hash of each session ID is stored; sessions end after 2 hours idle or 12 hours
-  after sign-in. Logout deletes the session, a password change signs out the
-  user's other devices, and deactivation signs them out everywhere.
+### Shopping
+
+| Feature | How it works |
+| --- | --- |
+| **Exact prices** | `DECIMAL(10,3)` and BCMath: Coke `3.99`, Pepsi `6.885` and Water `0.5` are seeded and never rounded. |
+| **Safe purchases** | One transaction locks the product row (`SELECT ... FOR UPDATE`), checks stock, takes it, and records the sale at the database price. Six buyers racing for the last item produce exactly one sale (tested). |
+| **Product list** | Search, sort by name, price or stock, 10 per page. |
+| **Purchase history** | Each purchase keeps the product name and price it was bought at, so renames and price changes never rewrite history. |
+
+### Administration
+
+| Feature | How it works |
+| --- | --- |
+| **Products** | Add, edit and delete (soft delete), and take products off sale without deleting them. |
+| **Stock history** | Every change is recorded: initial stock, restock, purchase, adjustment, with before and after, who made it, and why. |
+| **Dashboard** | Revenue, purchases, low-stock warnings with one-click restock, and a 7/14/30-day sales trend chart (SVG, no JavaScript library). |
+| **Transactions** | Filter by customer, product and date range, with exact totals and a CSV export of the filtered list. |
+| **Users** | Search and filter, change roles, deactivate (signs the user out everywhere). The primary admin and the last active admin are protected, even when two admins act at once. |
+
+### Security
+
+| Feature | How it works |
+| --- | --- |
+| **Access control** | Session login for the web and JWT for the API; Admin and Customer roles checked on the server for every request. |
+| **Input and output** | Server-side validation mirrored in the browser, CSRF tokens, escaped HTML, prepared statements. |
+| **Sessions** | Stored in MySQL as SHA-256 hashes; they end after 2 h idle or 12 h; HttpOnly, SameSite, Secure in production. |
+| **Headers** | Content-Security-Policy (only the site's own scripts), HSTS, Permissions-Policy, frame and sniffing protection. |
+| **Login cooldown** | Five wrong passwords in a row pause logins from that session for 30 seconds, with a live countdown. |
+| **No resubmits** | Every form redirects after it is sent (post, then redirect), so reloading never resends a form, a purchase or a password. |
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Language | PHP 8.4 (`strict_types`), Composer PSR-4 autoloading |
+| Database | MySQL 8.4 through PDO, plain SQL migrations |
+| Web server | Apache in Docker, single front controller (`public/index.php`) |
+| Routing | PHP 8 attributes, e.g. `#[Route('/products/{id}/purchase', ['POST'], ['user'])]` |
+| UI | Server-rendered PHP templates, Tailwind CSS (standalone build), a little vanilla JS |
+| API | JSON with JWT (`firebase/php-jwt`), OpenAPI 3 document and Swagger UI |
+| Quality | PHPUnit 13, PHPStan level 8, GitHub Actions |
+| Hosting | Railway (web + private MySQL), deployed only after CI passes |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser -->|HTML forms + session| Router
+    Client[API client] -->|JSON + Bearer JWT| Router
+    Router["Attribute router<br/>+ middleware<br/>(auth, roles, CSRF)"] --> Controllers
+    Controllers -->|thin: HTTP only| Services
+    Services["Services<br/>(business rules,<br/>transactions)"] --> Repositories
+    Repositories["Repositories<br/>(PDO, behind interfaces)"] --> MySQL[(MySQL)]
+```
+
+- **Controllers** only handle HTTP. Web and API controllers share the same **services**, so a rule (like "admins can't buy") exists once.
+- **Services** hold the business rules and own the database transactions.
+- **Repositories** are the only code that talks SQL; unit tests replace them with mocks.
+- Everything is wired by constructor injection in `bootstrap/app.php`; there is no container or global state.
+
+How a purchase stays safe:
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant S as PurchaseService
+    participant DB as MySQL
+    C->>S: buy 2 × Pepsi
+    S->>DB: BEGIN
+    S->>DB: SELECT ... FOR UPDATE (lock the row)
+    S->>S: on sale? enough stock? total = 2 × 6.885
+    S->>DB: take the stock, record the sale and the stock movement
+    S->>DB: COMMIT (or ROLLBACK on any failure)
+    S-->>C: purchase #123: $13.770
+```
+
+```text
+app/
+  Controllers/        Web controllers and Api/ JSON controllers
+  Services/           Business rules: purchase, products, inventory, users, auth, dashboard
+  Repositories/       PDO queries behind interfaces
+  Models/ Enums/      Product, User, Transaction, InventoryMovement, roles and statuses
+  Auth/               Session and token sign-in, login cooldown
+  Http/ Middleware/   Request/response, attribute router, sessions, CSRF, OpenAPI document
+  Database/           PDO connection, transactions, query builder, migrator
+bootstrap/app.php     Wires every object by constructor injection
+resources/views/      PHP templates
+public/index.php      The only public entry point
+tests/                Unit/ (mocks, no database) and Integration/ (real MySQL)
+```
 
 ## Database design
 
@@ -65,25 +159,6 @@ their purchase history. The same rules are available as a JWT-secured REST API.
 
 Migrations are in `database/migrations/` and seeders in `database/seeders/`.
 
-## Project structure
-
-```text
-app/
-  Controllers/        Web controllers (ProductsController, ...) and Api/ JSON controllers
-  Services/           Business rules shared by web and API (purchase, products, inventory,
-                      users, auth, dashboard)
-  Repositories/       PDO queries behind interfaces (mocked in unit tests)
-  Models/ Enums/      Product, User, Transaction, InventoryMovement, Role, statuses
-  Auth/               Session and token sign-in, login cooldown
-  Http/ Middleware/   Request/response, attribute router, sessions, CSRF, OpenAPI document
-  Database/           PDO connection, transactions, query builder, migrator
-bootstrap/app.php     Wires every object by constructor injection
-routes/               Registers the controllers and names the middleware
-resources/views/      PHP templates
-public/index.php      The only public entry point
-tests/                Unit/ (mocks, no database) and Integration/ (real MySQL)
-```
-
 ## Run locally
 
 Requires Docker with Compose.
@@ -95,14 +170,15 @@ docker compose exec app composer migrate
 docker compose exec app composer seed
 ```
 
-Open <http://localhost:10000>. `composer seed` adds the three products and the
-`admin@example.com` account using `DEMO_ADMIN_PASSWORD` from `.env` (required).
-If `DEMO_USER_PASSWORD` is set, it also adds the customer `user@example.com`.
-Both passwords must meet the password rules above. Customers can also register.
+Open <http://localhost:10000>.
 
-`docker compose logs -f app db` shows startup errors. The first `up` also
-creates the separate `vending_machine_test` database used by the integration
-tests; it is created only when the MySQL volume is new.
+- `composer seed` adds the three products and `admin@example.com` with the password from
+  `DEMO_ADMIN_PASSWORD` in `.env` (required). If `DEMO_USER_PASSWORD` is set, it also adds the
+  customer `user@example.com`. Both must meet the password rules: 8+ characters with upper and
+  lower case letters, a number and a symbol.
+- Customers can also register at `/register`.
+- `docker compose logs -f app db` shows startup errors. The first `up` also creates the separate
+  `vending_machine_test` database for the integration tests.
 
 ## Web pages
 
@@ -111,17 +187,16 @@ tests; it is created only when the MySQL volume is new.
 | Guests | `/login`, `/register` |
 | Signed in | `/products` (search, sort, pages), `/products/{id}`, `/account` |
 | Customers | Buy from `/products/{id}`, see `/my-transactions` and each confirmation |
-| Admins | `/admin` dashboard with a 7/14/30-day sales trend, `/admin/products` (add, edit, delete, on/off sale, `/admin/products/{id}/inventory` stock history and restock), `/admin/transactions` (filter by customer, product and dates; CSV export of the filtered list), `/admin/users` (search, filter, change role, activate or deactivate) |
+| Admins | `/admin` dashboard, `/admin/products` (add, edit, delete, on/off sale, stock history and restock), `/admin/transactions` (filters, CSV), `/admin/users` |
 
 ## REST API
 
-Send `Authorization: Bearer <token>` with the token returned by register or
-login. Tokens are HS256 JWTs signed with `JWT_SECRET` and expire after one hour;
-the user's role is reloaded from the database on every request.
+Send `Authorization: Bearer <token>` with the token from register or login. Tokens are HS256
+JWTs that expire after one hour; the user's role is reloaded from the database on every request.
 
-**Interactive docs:** open [`/docs`](http://localhost:10000/docs) (Swagger UI) to read every
-endpoint and try it: log in with `POST /api/login`, click **Authorize**, paste the token.
-The OpenAPI 3 document is at `/openapi.json`; a test keeps it in sync with the routes.
+**Interactive docs:** open [`/docs`](https://web-production-d5f8dfd1.up.railway.app/docs) to read
+and try every endpoint: run `POST /api/login`, click **Authorize**, paste the token. The OpenAPI
+document is at `/openapi.json`, and a test keeps it in sync with the routes.
 
 | Method | Path | Access |
 | --- | --- | --- |
@@ -134,8 +209,7 @@ The OpenAPI 3 document is at `/openapi.json`; a test keeps it in sync with the r
 | `GET` | `/api/transactions` | Admin |
 | `GET`, `PUT` | `/api/me` (name), `PUT /api/me/password` | Any token |
 
-Errors are JSON with the matching status: 401, 403, 404, 405 or 422 (with an
-`errors` object per field).
+Errors are JSON with the matching status: 401, 403, 404, 405 or 422 (with `errors` per field).
 
 ```sh
 TOKEN=$(curl -s localhost:10000/api/login -H 'Content-Type: application/json' \
@@ -144,39 +218,30 @@ curl -s localhost:10000/api/products/2/purchase -H "Authorization: Bearer $TOKEN
   -H 'Content-Type: application/json' -d '{"quantity":1}'
 ```
 
-## Tests and static analysis
+## Tests and CI
 
 ```sh
 docker compose exec app composer test:unit       # 116 unit tests, no database
-docker compose exec app composer analyse         # PHPStan
+docker compose exec app composer analyse         # PHPStan level 8
 docker compose exec app composer test            # unit + integration tests
 ```
 
-- **Unit tests** send requests through the real routes, middleware and
-  controllers with mocked repositories (dependency injection), so they need no
-  database. They cover product CRUD, admin-only access, CSRF, validation, prices
-  taken from the database, user management rules, the login cooldown, the
-  post-then-redirect forms, security headers, JWT, the router, and the API docs
-  matching the routes.
-- **Integration tests** (20) run against MySQL: insufficient stock changes
-  nothing, a failed recording rolls back the stock, six buyers racing for the
-  last item produce exactly one sale, every stock change adds up in the history,
-  transaction filters and totals, stored sessions and their timeouts, and two
-  admins demoting each other cannot remove the last admin.
+| Suite | What it covers |
+| --- | --- |
+| **Unit (116)** | Real routes, middleware and controllers with mocked repositories (dependency injection): product CRUD, roles, CSRF, validation, prices from the database, user management rules, login cooldown, post-then-redirect forms, security headers, JWT, the router, and the API docs matching the routes. |
+| **Integration (20)** | Real MySQL: insufficient stock changes nothing, a failed recording rolls back the stock, six racing buyers produce exactly one sale, stock history adds up, transaction filters and totals, stored sessions and timeouts, and two admins can't remove the last admin. |
 
-**Continuous integration:** GitHub Actions (`.github/workflows/ci.yml`) runs on
-every pull request and on pushes to `main` and `develop`. It checks for
-committed secrets, validates Composer and audits dependencies, lints every PHP
-file, runs the unit tests with coverage (uploaded as an artifact) and PHPStan,
-migrates and seeds a MySQL 8.4 service twice to prove both are repeatable, runs
-the integration tests, smoke-tests the app, and builds the Docker image.
+**CI:** GitHub Actions runs on every pull request and on pushes to `main` and `develop`. It
+checks for committed secrets, audits dependencies, lints every PHP file, runs the unit tests with
+coverage and PHPStan, migrates and seeds MySQL twice to prove both are repeatable, runs the
+integration tests, smoke-tests the app and builds the Docker image. `main` and `develop` are
+protected, so nothing merges without green CI.
 
-> **Warning:** the integration tests empty the tables of the database named by
-> `DB_TEST_NAME` before each test. They refuse to run unless `DB_NAME` is set
-> and `DB_TEST_NAME` is a different database whose name ends in `_test`. Never
-> point `DB_TEST_NAME` at a database with data you want to keep.
+> **Warning:** the integration tests empty the tables of the database named by `DB_TEST_NAME`.
+> They refuse to run unless `DB_NAME` is set and `DB_TEST_NAME` is a different database whose
+> name ends in `_test`.
 
-## Railway deployment
+## Deployment (Railway)
 
 Use one Railway project with a PHP web service (this repository's `Dockerfile`)
 and a MySQL database service. Keep MySQL private; do not enable its public TCP
@@ -204,6 +269,8 @@ proxy for the web app.
 
 The Free plan's $1 monthly usage credit covers both services and the database
 volume; services sleep when idle and stop if the credit is exhausted.
+
+**Continuous deployment:** Railway deploys `main` automatically, but only after CI passes on it ("Wait for CI").
 
 ### Data backfills
 

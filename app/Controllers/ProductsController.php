@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Exceptions\AuthenticationException;
 use App\Exceptions\ValidationException;
 use App\Http\Request;
 use App\Http\Response;
@@ -12,6 +13,8 @@ use App\Http\Session\Session;
 use App\Auth\SessionAuth;
 use App\Http\View;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\InventoryService;
 use App\Services\ProductService;
 use App\Services\PurchaseService;
 
@@ -25,6 +28,7 @@ final class ProductsController
     public function __construct(
         private readonly ProductService $products,
         private readonly PurchaseService $purchases,
+        private readonly InventoryService $inventory,
         private readonly SessionAuth $auth,
         private readonly Session $session,
         private readonly View $view,
@@ -39,7 +43,7 @@ final class ProductsController
     #[Route('/products', ['GET'], ['auth'])]
     public function index(Request $request): Response
     {
-        return $this->view->render('products/index', ['title' => 'Products'] + $this->listing($request));
+        return $this->view->render('products/index', ['title' => 'Products'] + $this->listing($request, onSaleOnly: true));
     }
 
     /**
@@ -49,7 +53,10 @@ final class ProductsController
     #[Route('/products/{id}', ['GET'], ['auth'])]
     public function show(Request $request, int $id): Response
     {
-        return $this->details($this->products->find($id), '1', []);
+        // Customers only see products on sale; admins can open any product.
+        $product = $this->auth->user()?->canManageProducts() ? $this->products->find($id) : $this->products->findOnSale($id);
+
+        return $this->details($product, '1', []);
     }
 
     /**
@@ -100,7 +107,7 @@ final class ProductsController
     {
         $input = $request->only('name', 'price', 'quantity_available');
         try {
-            $product = $this->products->create($input);
+            $product = $this->products->create($this->admin(), $input);
         } catch (ValidationException $e) {
             return $this->form(null, $input, $e->errors, 422);
         }
@@ -118,7 +125,7 @@ final class ProductsController
     public function edit(Request $request, int $id): Response
     {
         $product = $this->products->find($id);
-        $input = ['name' => $product->name, 'price' => $product->price, 'quantity_available' => (string) $product->quantityAvailable];
+        $input = ['name' => $product->name, 'price' => $product->price, 'quantity_available' => (string) $product->quantityAvailable, 'status' => $product->status->value];
 
         return $this->form($product, $input, []);
     }
@@ -131,9 +138,9 @@ final class ProductsController
     public function update(Request $request, int $id): Response
     {
         $product = $this->products->find($id);
-        $input = $request->only('name', 'price', 'quantity_available');
+        $input = $request->only('name', 'price', 'quantity_available', 'status');
         try {
-            $product = $this->products->update($id, $input);
+            $product = $this->products->update($this->admin(), $id, $input);
         } catch (ValidationException $e) {
             return $this->form($product, $input, $e->errors, 422);
         }
@@ -157,12 +164,41 @@ final class ProductsController
     }
 
     /**
+     * The product's stock history (?type= filters by movement type) with the restock form.
+     * @return Response
+     */
+    #[Route('/admin/products/{id}/inventory', ['GET'], ['admin'])]
+    public function inventory(Request $request, int $id): Response
+    {
+        return $this->inventoryPage($request, $id, ['quantity' => '', 'reason' => ''], []);
+    }
+
+    /**
+     * Adds stock with an optional reason, or shows the page again with the errors.
+     * @return Response
+     */
+    #[Route('/admin/products/{id}/restock', ['POST'], ['admin'])]
+    public function restock(Request $request, int $id): Response
+    {
+        $input = $request->only('quantity', 'reason');
+        try {
+            $product = $this->inventory->restock($this->admin(), $id, $input);
+        } catch (ValidationException $e) {
+            return $this->inventoryPage($request, $id, $input, $e->errors, 422);
+        }
+
+        $this->session->flash("Added {$input['quantity']} to {$product->name}; {$product->quantityAvailable} in stock now.");
+
+        return Response::redirect("/admin/products/{$id}/inventory");
+    }
+
+    /**
      * The page of products and the filters for the ?q=&sort=&direction=&page= query.
      * @return array{products: \App\Support\Page<Product>, filters: array{q: string, sort: string, direction: string}}
      */
-    private function listing(Request $request): array
+    private function listing(Request $request, bool $onSaleOnly = false): array
     {
-        $page = $this->products->list((int) $request->query('page'), $request->query('sort'), $request->query('direction'), $request->query('q'));
+        $page = $this->products->list((int) $request->query('page'), $request->query('sort'), $request->query('direction'), $request->query('q'), $onSaleOnly);
         $sort = in_array($request->query('sort'), ['name', 'price', 'quantity_available'], true) ? $request->query('sort') : 'name';
         $direction = $request->query('direction') === 'desc' ? 'desc' : 'asc';
 
@@ -190,5 +226,35 @@ final class ProductsController
         $title = $product === null ? 'Add product' : "Edit {$product->name}";
 
         return $this->view->render('admin/products/form', ['title' => $title, 'product' => $product, 'input' => $input, 'errors' => $errors], $status);
+    }
+
+    /**
+     * The inventory page for the product with the restock form values and any errors.
+     * @param array<string, string> $input
+     * @param array<string, string> $errors
+     * @return Response
+     */
+    private function inventoryPage(Request $request, int $id, array $input, array $errors, int $status = 200): Response
+    {
+        $product = $this->products->find($id);
+        $type = $request->query('type');
+
+        return $this->view->render('admin/products/inventory', [
+            'title' => "{$product->name} stock",
+            'product' => $product,
+            'movements' => $this->inventory->history($id, (int) $request->query('page'), $type),
+            'type' => $type,
+            'input' => $input,
+            'errors' => $errors,
+        ], $status);
+    }
+
+    /**
+     * The signed-in admin; the route middleware guarantees one.
+     * @return User
+     */
+    private function admin(): User
+    {
+        return $this->auth->user() ?? throw new AuthenticationException();
     }
 }

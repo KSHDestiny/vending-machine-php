@@ -45,9 +45,10 @@ final class TransactionsController
     #[Route('/transactions/{id}', ['GET'], ['auth'])]
     public function show(Request $request, int $id): Response
     {
-        $transaction = $this->purchases->findFor($this->user(), $id);
+        $user = $this->user();
+        $transaction = $this->purchases->findFor($user, $id);
 
-        return $this->view->render('transactions/show', ['title' => 'Purchase confirmation', 'transaction' => $transaction]);
+        return $this->view->render('transactions/show', ['title' => $user->canManageProducts() ? "Purchase #{$transaction->id}" : 'Purchase confirmation', 'transaction' => $transaction]);
     }
 
     /**

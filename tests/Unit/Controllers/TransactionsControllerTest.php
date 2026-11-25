@@ -63,6 +63,25 @@ final class TransactionsControllerTest extends TestCase
         self::assertSame(200, $this->app->send('GET', '/transactions/7')->status);
     }
 
+    public function testAdminsSeePurchaseDetailsAndCustomersSeeTheirConfirmation(): void
+    {
+        $this->transactions->expects(self::exactly(2))->method('find')->willReturn(self::purchase(userId: 2));
+
+        $this->app->actingAs(self::user(2));
+        $customer = $this->app->send('GET', '/transactions/7')->body;
+        $this->app->actingAs(self::user(1, Role::Admin));
+        $admin = $this->app->send('GET', '/transactions/7')->body;
+
+        self::assertStringContainsString('Purchase confirmation', $customer);
+        self::assertStringContainsString('Keep shopping', $customer);
+        self::assertStringNotContainsString('Buyer', $customer);
+        self::assertStringContainsString('Purchase details', $admin);
+        self::assertStringNotContainsString('Keep shopping', $admin);
+        self::assertStringContainsString('href="/admin/users/2"', $admin, 'buyer links to their user page');
+        self::assertStringContainsString('href="/admin/transactions"', $admin);
+        self::assertMatchesRegularExpression('#href="/admin/products/\d+/inventory"#', $admin, 'back to the product\'s stock history');
+    }
+
     public function testOnlyAdminsSeeAllTransactions(): void
     {
         $this->transactions->method('paginate')->willReturn(new Page([self::purchase(userId: 2)], 1, 1, 10));

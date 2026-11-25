@@ -36,10 +36,11 @@ $actions = '<form method="get" action="/admin/products" role="search">'
         <tbody class="divide-y divide-slate-100">
         <?php foreach ($products->items as $product): ?>
             <tr>
-                <td class="px-4 py-3 font-medium text-slate-900"><?= $e($product->name) ?></td>
+                <td class="px-4 py-3 font-medium text-slate-900"><?= $e($product->name) ?><?php if (!$product->isOnSale()): ?> <span class="ml-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/20">Off sale</span><?php endif ?></td>
                 <td class="px-4 py-3 text-right">$<?= $e($money($product->price)) ?></td>
                 <td class="px-4 py-3 text-right"><?= $partial('stock-badge', ['product' => $product]) ?></td>
                 <td class="px-4 py-3 text-right">
+                    <a href="/admin/products/<?= $e($product->id) ?>/inventory" class="mr-3 font-medium text-indigo-600 hover:underline">Stock</a>
                     <a href="/admin/products/<?= $e($product->id) ?>/edit" class="font-medium text-indigo-600 hover:underline">Edit</a>
                     <form method="post" action="/admin/products/<?= $e($product->id) ?>" class="ml-3 inline" data-confirm="Delete <?= $e($product->name) ?>? Its purchase history is kept.">
                         <?= $csrf ?>

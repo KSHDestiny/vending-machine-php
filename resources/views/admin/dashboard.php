@@ -62,7 +62,7 @@ $actions = '<a href="/admin/products/create" class="inline-flex items-center gap
                                 <p class="truncate text-sm font-medium text-slate-900"><?= $e($product->name) ?></p>
                                 <p class="text-xs <?= $product->isSoldOut() ? 'text-rose-600' : 'text-amber-600' ?>"><?= $product->isSoldOut() ? 'Sold out' : $e($product->quantityAvailable) . ' units remaining' ?></p>
                             </div>
-                            <a href="/admin/products/<?= $e($product->id) ?>/edit" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"><?= $partial('icon', ['name' => 'plus', 'class' => 'h-3.5 w-3.5']) ?>Restock</a>
+                            <a href="/admin/products/<?= $e($product->id) ?>/inventory" class="inline-flex shrink-0 items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"><?= $partial('icon', ['name' => 'plus', 'class' => 'h-3.5 w-3.5']) ?>Restock</a>
                         </div>
                         <div class="mt-2 h-1.5 rounded-full bg-slate-100" aria-hidden="true">
                             <div class="h-1.5 rounded-full <?= $product->isSoldOut() ? 'bg-rose-500' : 'bg-amber-500' ?>" style="width: <?= $width ?>%"></div>

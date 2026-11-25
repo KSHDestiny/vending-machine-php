@@ -8,6 +8,8 @@ use App\Models\Product;
 use App\Enums\Role;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Enums\ProductStatus;
+use App\Repositories\Contracts\InventoryRepositoryInterface;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
@@ -39,17 +41,19 @@ final class ProductsControllerTest extends TestCase
         $this->transactions = $this->createMock(TransactionRepositoryInterface::class);
         $this->database = new ImmediateTransactions();
 
+        $inventory = $this->createStub(InventoryRepositoryInterface::class);
+        $inventory->method('paginateForProduct')->willReturn(new Page([], 0, 1, 15));
         $users = $this->createStub(UserRepositoryInterface::class);
         $users->method('find')->willReturnCallback(static fn (int $id): ?User => [1 => self::admin(), 2 => self::customer()][$id] ?? null);
 
-        $this->app = new Application(['products' => $this->products, 'transactions' => $this->transactions, 'users' => $users, 'transactionManager' => $this->database]);
+        $this->app = new Application(['products' => $this->products, 'transactions' => $this->transactions, 'users' => $users, 'inventory' => $inventory, 'transactionManager' => $this->database]);
     }
 
     public function testProductListReturnsTheProductsWithSearchSortAndPaging(): void
     {
         $this->products->expects(self::once())
             ->method('paginate')
-            ->with(2, 10, 'price', 'desc', 'pep')
+            ->with(2, 10, 'price', 'desc', 'pep', true)
             ->willReturn(new Page([self::pepsi()], 11, 2, 10));
 
         $this->app->actingAs(self::customer());
@@ -91,6 +95,47 @@ final class ProductsControllerTest extends TestCase
         self::assertStringContainsString('Product not found.', $response->body);
     }
 
+    public function testCustomersCannotOpenAProductOffSaleButAdminsCan(): void
+    {
+        $this->products->expects(self::exactly(2))->method('find')->with(2)->willReturn(new Product(2, 'Pepsi', '6.885', 10, ProductStatus::Inactive));
+        $this->transactions->expects(self::never())->method('create');
+
+        $this->app->actingAs(self::customer());
+        self::assertSame(404, $this->app->send('GET', '/products/2')->status);
+        $this->app->actingAs(self::admin());
+        self::assertSame(200, $this->app->send('GET', '/products/2')->status);
+    }
+
+    public function testAdminRestocksAProduct(): void
+    {
+        $this->products->method('findForUpdate')->willReturn(self::pepsi(4));
+        $this->products->method('find')->willReturn(self::pepsi(14));
+        $this->products->expects(self::once())->method('setStock')->with(2, 14);
+        $this->transactions->expects(self::never())->method('create');
+
+        $this->app->actingAs(self::admin());
+        $response = $this->app->submit('POST', '/admin/products/2/restock', ['quantity' => '10', 'reason' => 'Delivery']);
+
+        self::assertSame(303, $response->status);
+        self::assertSame('/admin/products/2/inventory', $response->headers['Location']);
+    }
+
+    public function testInvalidRestockShowsTheErrorAndCustomersCannotRestock(): void
+    {
+        $this->products->method('find')->willReturn(self::pepsi(4));
+        $this->products->expects(self::never())->method('setStock');
+        $this->transactions->expects(self::never())->method('create');
+
+        $this->app->actingAs(self::admin());
+        $response = $this->app->submit('POST', '/admin/products/2/restock', ['quantity' => '0']);
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('Quantity must be', $response->body);
+
+        $this->app->actingAs(self::customer());
+        self::assertSame(403, $this->app->submit('POST', '/admin/products/2/restock', ['quantity' => '5'])->status);
+        self::assertSame(403, $this->app->send('GET', '/admin/products/2/inventory')->status);
+    }
+
     public function testProductCreationSucceedsWithValidInput(): void
     {
         $this->app->actingAs(self::admin());
@@ -128,7 +173,9 @@ final class ProductsControllerTest extends TestCase
     {
         $this->app->actingAs(self::admin());
         $this->products->method('find')->willReturn(self::pepsi());
-        $this->products->expects(self::once())->method('update')->with(2, 'Pepsi Max', '7.000', 50);
+        $this->products->method('findForUpdate')->willReturn(self::pepsi());
+        $this->products->expects(self::once())->method('update')->with(2, 'Pepsi Max', '7.000', ProductStatus::Active);
+        $this->products->expects(self::once())->method('setStock')->with(2, 50);
 
         $response = $this->app->submit('PUT', '/admin/products/2', ['name' => 'Pepsi Max', 'price' => '7.000', 'quantity_available' => '50']);
 

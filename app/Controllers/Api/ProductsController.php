@@ -10,6 +10,7 @@ use App\Http\Response;
 use App\Http\Routing\Route;
 use App\Auth\TokenAuth;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\ProductService;
 use App\Services\PurchaseService;
 
@@ -33,7 +34,7 @@ final class ProductsController
     #[Route('/api/products', ['GET'], ['jwt'])]
     public function index(Request $request): Response
     {
-        $page = $this->products->list((int) $request->query('page'), $request->query('sort'), $request->query('direction'), $request->query('q'));
+        $page = $this->products->list((int) $request->query('page'), $request->query('sort'), $request->query('direction'), $request->query('q'), !$this->isAdmin($request));
 
         return Response::json(['data' => array_map(static fn (Product $p): array => $p->toArray(), $page->items), 'meta' => $page->meta()]);
     }
@@ -45,7 +46,9 @@ final class ProductsController
     #[Route('/api/products/{id}', ['GET'], ['jwt'])]
     public function show(Request $request, int $id): Response
     {
-        return Response::json(['data' => $this->products->find($id)->toArray()]);
+        $product = $this->isAdmin($request) ? $this->products->find($id) : $this->products->findOnSale($id);
+
+        return Response::json(['data' => $product->toArray()]);
     }
 
     /**
@@ -55,7 +58,7 @@ final class ProductsController
     #[Route('/api/products', ['POST'], ['jwt.admin'])]
     public function store(Request $request): Response
     {
-        $product = $this->products->create($request->only('name', 'price', 'quantity_available'));
+        $product = $this->products->create($this->user($request), $request->only('name', 'price', 'quantity_available'));
 
         return Response::json(['data' => $product->toArray()], 201, ['Location' => "/api/products/{$product->id}"]);
     }
@@ -67,7 +70,7 @@ final class ProductsController
     #[Route('/api/products/{id}', ['PUT'], ['jwt.admin'])]
     public function update(Request $request, int $id): Response
     {
-        return Response::json(['data' => $this->products->update($id, $request->only('name', 'price', 'quantity_available'))->toArray()]);
+        return Response::json(['data' => $this->products->update($this->user($request), $id, $request->only('name', 'price', 'quantity_available', 'status'))->toArray()]);
     }
 
     /**
@@ -93,5 +96,23 @@ final class ProductsController
         $transaction = $this->purchases->purchase($buyer, $id, $request->input('quantity'));
 
         return Response::json(['data' => $transaction->toArray()], 201);
+    }
+
+    /**
+     * The token's user; the route middleware guarantees one.
+     * @return User
+     */
+    private function user(Request $request): User
+    {
+        return $this->auth->user($request) ?? throw new AuthenticationException();
+    }
+
+    /**
+     * Whether the token belongs to an admin, who also sees products off sale.
+     * @return bool
+     */
+    private function isAdmin(Request $request): bool
+    {
+        return $this->auth->user($request)?->canManageProducts() ?? false;
     }
 }

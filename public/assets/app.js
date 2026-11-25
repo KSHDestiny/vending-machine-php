@@ -79,15 +79,23 @@
         });
     });
 
-    // Live total on the purchase form: quantity × price, in thousandths to avoid float rounding.
+    // Money like the server's View::money(): thousands separators, 2 to 3 decimals
+    // (6878.115 → "6,878.115", 3.990 → "3.99"). Exact integer thousandths, no floats.
+    const money = (thousandths) => {
+        const whole = (thousandths / 1000n).toLocaleString('en-US');
+        const fraction = (thousandths % 1000n).toString().padStart(3, '0').replace(/0+$/, '').padEnd(2, '0');
+
+        return `${whole}.${fraction}`;
+    };
+
+    // Live total on the purchase form: quantity × price.
     document.querySelectorAll('input[data-price]').forEach((input) => {
         const total = input.form.querySelector('[data-total]');
-        const thousandths = Math.round(Number(input.dataset.price) * 1000);
+        const [whole, fraction = ''] = input.dataset.price.split('.');
+        const thousandths = BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, '0').slice(0, 3));
         const update = () => {
-            const quantity = Number.parseInt(input.value, 10);
-            if (total && Number.isInteger(quantity) && quantity > 0) {
-                const cents = (thousandths * quantity / 1000).toFixed(3).replace(/0$/, '');
-                total.textContent = `$${cents}`;
+            if (total && /^[1-9][0-9]{0,9}$/.test(input.value)) {
+                total.textContent = `$${money(thousandths * BigInt(input.value))}`;
             }
         };
         input.addEventListener('input', update);

@@ -8,12 +8,12 @@
  * @var array<string, string> $nameErrors
  * @var array<string, string> $passwordErrors
  */
-$button = 'rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500';
+$button = 'rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500';
 ?>
-<h1 class="text-2xl font-semibold text-slate-900">My account</h1>
+<?= $partial('page-header', ['title' => 'Account', 'description' => 'Your profile and password.']) ?>
 
 <div class="mt-6 grid gap-6 md:grid-cols-2">
-    <section class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 class="text-lg font-semibold text-slate-900">Profile</h2>
         <dl class="mt-4 space-y-1 text-sm">
             <div class="flex gap-2"><dt class="text-slate-500">Email:</dt><dd class="text-slate-900"><?= $e($user->email) ?></dd></div>
@@ -27,7 +27,7 @@ $button = 'rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hov
         </form>
     </section>
 
-    <section class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 class="text-lg font-semibold text-slate-900">Change password</h2>
         <form method="post" action="/account/password" class="mt-4 space-y-4" data-validate novalidate>
             <?= $csrf ?>

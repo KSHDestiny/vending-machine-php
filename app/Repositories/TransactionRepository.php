@@ -9,6 +9,7 @@ use App\Database\QueryBuilder;
 use App\Models\Transaction;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Support\Page;
+use DateTimeImmutable;
 use LogicException;
 
 final class TransactionRepository implements TransactionRepositoryInterface
@@ -62,6 +63,24 @@ final class TransactionRepository implements TransactionRepositoryInterface
             'items_sold' => (int) ($row['items_sold'] ?? 0),
             'revenue' => (string) ($row['revenue'] ?? '0.000'),
         ];
+    }
+
+    public function dailySales(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        // Raw SQL on purpose: grouped DECIMAL sums. A plain range on created_at can use its index.
+        $statement = $this->database->pdo()->prepare(
+            'SELECT DATE(created_at) AS day, COUNT(*) AS count, SUM(total_price) AS revenue FROM transactions'
+            . ' WHERE created_at >= ? AND created_at < ? GROUP BY day ORDER BY day',
+        );
+        $statement->execute([$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')]);
+
+        $days = [];
+        foreach ($statement->fetchAll() as $row) {
+            $revenue = (string) $row['revenue'];
+            $days[(string) $row['day']] = ['count' => (int) $row['count'], 'revenue' => is_numeric($revenue) ? $revenue : '0.000'];
+        }
+
+        return $days;
     }
 
     /**

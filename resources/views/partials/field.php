@@ -16,6 +16,6 @@ $invalid = $error !== null;
     <label for="<?= $e($name) ?>" class="block text-sm font-medium text-slate-700"><?= $e($label) ?></label>
     <input id="<?= $e($name) ?>" name="<?= $e($name) ?>" value="<?= $e($value) ?>" <?= $attributes ?>
            aria-invalid="<?= $invalid ? 'true' : 'false' ?>" aria-describedby="<?= $e($name) ?>-error"
-           class="mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 <?= $invalid ? 'border-red-400' : 'border-slate-300' ?>">
+           class="mt-1 block w-full rounded-lg border bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 <?= $invalid ? 'border-red-400' : 'border-slate-300' ?>">
     <p id="<?= $e($name) ?>-error" data-error-for="<?= $e($name) ?>" class="mt-1 text-sm text-red-600"><?= $e($error ?? '') ?></p>
 </div>

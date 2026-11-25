@@ -6,6 +6,7 @@ namespace App\Repositories\Contracts;
 
 use App\Models\Transaction;
 use App\Support\Page;
+use DateTimeImmutable;
 
 interface TransactionRepositoryInterface
 {
@@ -38,4 +39,10 @@ interface TransactionRepositoryInterface
      * @return array{count: int, items_sold: int, revenue: string}
      */
     public function summary(): array;
+
+    /**
+     * Purchases and exact revenue per day from $from up to (not including) $to; days without sales are left out.
+     * @return array<string, array{count: int, revenue: numeric-string}> keyed by Y-m-d, oldest first
+     */
+    public function dailySales(DateTimeImmutable $from, DateTimeImmutable $to): array;
 }

@@ -86,5 +86,5 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
     );
 
     // The kernel runs each request and turns any exception into an error response.
-    return new Kernel($router, new ErrorHandler($view, $logger));
+    return new Kernel($router, new ErrorHandler($view, $logger), $view);
 };

@@ -16,6 +16,7 @@ final class Kernel
     public function __construct(
         private readonly Router $router,
         private readonly ErrorHandler $errors,
+        private readonly View $view,
     ) {
     }
 
@@ -25,6 +26,7 @@ final class Kernel
      */
     public function handle(Request $request): Response
     {
+        $this->view->setCurrentPath($request->path);
         try {
             return $this->router->dispatch($request);
         } catch (Throwable $exception) {

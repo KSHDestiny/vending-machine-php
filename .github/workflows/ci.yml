@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests and static analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: vending_machine
+          MYSQL_USER: vending_app
+          MYSQL_PASSWORD: ci-only-db-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-only-root-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+
+    # CI-only values; nothing here is used outside this workflow.
+    env:
+      APP_ENV: local
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_NAME: vending_machine
+      DB_TEST_NAME: vending_machine_test
+      DB_USER: vending_app
+      DB_PASSWORD: ci-only-db-password
+      JWT_SECRET: ci-only-jwt-secret-that-is-at-least-32-bytes
+      SEED_ADMIN_PASSWORD: "Ci#Admin123"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check for committed secrets
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then
+            echo "::error::A .env file is tracked by Git."; exit 1
+          fi
+          if git grep -I -n -E 'BEGIN [A-Z ]*PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}' -- . ':!composer.lock'; then
+            echo "::error::A private key or access token is committed."; exit 1
+          fi
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, bcmath, mbstring
+          coverage: pcov
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Check for vulnerable dependencies
+        run: composer audit
+
+      - name: PHP syntax
+        run: find app bin bootstrap config database public routes tests -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Unit tests with coverage
+        run: vendor/bin/phpunit --testsuite unit --coverage-text --coverage-clover coverage/clover.xml
+
+      - name: Static analysis
+        run: vendor/bin/phpstan analyse --memory-limit=512M --no-progress
+
+      - name: Create the test database
+        run: mysql -h 127.0.0.1 -uroot -pci-only-root-password < docker/mysql/init/01-test-database.sql
+
+      - name: Migrate and seed
+        run: |
+          php bin/wait-for-db.php
+          composer migrate
+          composer seed
+          # Both must be safe to run again on every deploy.
+          composer migrate
+          composer seed
+
+      - name: Integration tests
+        run: vendor/bin/phpunit --testsuite integration
+
+      - name: Smoke test the application
+        run: |
+          php -S 127.0.0.1:8000 -t public public/index.php > /tmp/server.log 2>&1 &
+          for _ in $(seq 1 20); do curl -sf -o /dev/null http://127.0.0.1:8000/health && break; sleep 0.5; done
+          curl -sf http://127.0.0.1:8000/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/login)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/products)" = 401
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: coverage/clover.xml
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the production image
+        run: docker build --tag vending-machine:ci .

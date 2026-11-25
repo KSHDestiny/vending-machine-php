@@ -86,7 +86,7 @@ final class AccountController
     private function page(string $name, array $nameErrors, array $passwordErrors, int $status = 200): Response
     {
         return $this->view->render('account/show', [
-            'title' => 'My account',
+            'title' => 'Account',
             'user' => $this->user(),
             'name' => $name,
             'nameErrors' => $nameErrors,

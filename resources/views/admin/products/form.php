@@ -12,9 +12,9 @@
  * @var array<string, string> $errors
  */
 ?>
-<a href="/admin/products" class="text-sm text-indigo-600 hover:underline">← Manage products</a>
-<section class="mt-4 max-w-lg rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-    <h1 class="text-2xl font-semibold text-slate-900"><?= $e($title) ?></h1>
+<a href="/admin/products" class="text-sm font-medium text-slate-500 hover:text-slate-900">← Products</a>
+<section class="mt-4 max-w-lg rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+    <h1 class="text-2xl font-semibold tracking-tight text-slate-900"><?= $e($title) ?></h1>
     <form method="post" action="<?= $product === null ? '/admin/products' : '/admin/products/' . $e($product->id) ?>" class="mt-6 space-y-4" data-validate novalidate>
         <?= $csrf ?>
         <?php if ($product !== null): ?>
@@ -24,8 +24,8 @@
         <?= $partial('field', ['name' => 'price', 'label' => 'Price (USD)', 'value' => $input['price'] ?? '', 'error' => $errors['price'] ?? null, 'attributes' => 'type="number" required min="0.001" max="9999999.999" step="0.001" inputmode="decimal" data-invalid="Price must be greater than 0, with up to 3 decimals."']) ?>
         <?= $partial('field', ['name' => 'quantity_available', 'label' => 'Quantity available', 'value' => $input['quantity_available'] ?? '', 'error' => $errors['quantity_available'] ?? null, 'attributes' => 'type="number" required min="0" max="999999999" step="1" inputmode="numeric" data-invalid="Quantity available must be a whole number of 0 or more."']) ?>
         <div class="flex gap-3">
-            <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"><?= $product === null ? 'Add product' : 'Save changes' ?></button>
-            <a href="/admin/products" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</a>
+            <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"><?= $product === null ? 'Add product' : 'Save changes' ?></button>
+            <a href="/admin/products" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</a>
         </div>
     </form>
 </section>

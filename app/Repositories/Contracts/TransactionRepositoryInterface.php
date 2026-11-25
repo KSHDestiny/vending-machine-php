@@ -35,10 +35,10 @@ interface TransactionRepositoryInterface
     public function paginate(int $page, int $perPage): Page;
 
     /**
-     * Totals over all purchases; revenue is an exact decimal string.
+     * Totals over all purchases, or one buyer's with $userId; revenue is an exact decimal string.
      * @return array{count: int, items_sold: int, revenue: string}
      */
-    public function summary(): array;
+    public function summary(?int $userId = null): array;
 
     /**
      * Purchases and exact revenue per day from $from up to (not including) $to; days without sales are left out.

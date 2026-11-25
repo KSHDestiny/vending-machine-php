@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\Role;
+use App\Enums\UserStatus;
 
 /*
  * An account, with what its role allows: admins manage products and stock,
- * customers buy them.
+ * customers buy them. Inactive accounts cannot sign in.
  */
 final class User
 {
+    /** @var string The seeded admin account; it always stays an admin. */
+    public const PRIMARY_ADMIN_EMAIL = 'admin@example.com';
+
     public function __construct(
         public readonly int $id,
         public readonly string $name,
@@ -19,7 +23,26 @@ final class User
         /** @var string The password_hash() value, never the password. */
         public readonly string $passwordHash,
         public readonly Role $role,
+        public readonly UserStatus $status = UserStatus::Active,
     ) {
+    }
+
+    /**
+     * Whether the account may sign in.
+     * @return bool
+     */
+    public function isActive(): bool
+    {
+        return $this->status === UserStatus::Active;
+    }
+
+    /**
+     * Whether this is the seeded admin account, which can never become a customer.
+     * @return bool
+     */
+    public function isPrimaryAdmin(): bool
+    {
+        return $this->email === self::PRIMARY_ADMIN_EMAIL;
     }
 
     /**

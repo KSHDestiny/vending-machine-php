@@ -31,6 +31,7 @@ $nav = $isAdmin
         ['/admin', 'Dashboard', 'dashboard', []],
         ['/admin/products', 'Products', 'cube', ['/admin/products/']],
         ['/admin/transactions', 'Transactions', 'receipt', ['/transactions/']],
+        ['/admin/users', 'Users', 'users', ['/admin/users/']],
         ['/products', 'Storefront', 'bag', ['/', '/products/']],
     ]
     : [

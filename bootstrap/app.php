@@ -31,6 +31,7 @@ use App\Services\AuthService;
 use App\Services\DashboardService;
 use App\Services\JwtService;
 use App\Services\ProductService;
+use App\Services\UserManagementService;
 use App\Services\PurchaseService;
 use App\Support\Logger;
 
@@ -54,6 +55,7 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
     $productService = new ProductService($productRepository);
     $purchaseService = new PurchaseService($productRepository, $transactionRepository, $overrides['transactionManager'] ?? $database);
     $jwtService = new JwtService($config['jwt']['secret'], $config['jwt']['ttl']);
+    $userManagement = new UserManagementService($userRepository, $transactionRepository, $overrides['transactionManager'] ?? $database);
 
     // HTTP: the session, the signed-in user (session for web, JWT for API) and the views.
     $session = new Session($sessionStore ?? new NativeSessionStore($config['production']));
@@ -73,6 +75,7 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
         new Controllers\ProductsController($productService, $purchaseService, $sessionAuth, $session, $view),
         new Controllers\TransactionsController($purchaseService, $sessionAuth, $view),
         new Controllers\DashboardController(new DashboardService($productRepository, $transactionRepository), $view),
+        new Controllers\AdminUsersController($userManagement, $sessionAuth, $session, $view),
     );
 
     // API routes: JSON endpoints behind the JWT middleware, outside the CSRF group.

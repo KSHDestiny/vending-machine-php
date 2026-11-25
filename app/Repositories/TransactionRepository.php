@@ -48,13 +48,14 @@ final class TransactionRepository implements TransactionRepositoryInterface
         return $this->withNames()->orderBy('transactions.id', 'desc')->paginate($page, $perPage)->map(self::toTransaction(...));
     }
 
-    public function summary(): array
+    public function summary(?int $userId = null): array
     {
         // Raw SQL on purpose: aggregates with exact DECIMAL totals.
         $statement = $this->database->pdo()->prepare(
-            'SELECT COUNT(*) AS count, COALESCE(SUM(quantity), 0) AS items_sold, COALESCE(SUM(total_price), 0.000) AS revenue FROM transactions',
+            'SELECT COUNT(*) AS count, COALESCE(SUM(quantity), 0) AS items_sold, COALESCE(SUM(total_price), 0.000) AS revenue FROM transactions'
+            . ($userId === null ? '' : ' WHERE user_id = ?'),
         );
-        $statement->execute();
+        $statement->execute($userId === null ? [] : [$userId]);
         $row = $statement->fetch();
         $row = is_array($row) ? $row : [];
 

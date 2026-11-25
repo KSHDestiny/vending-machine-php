@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace App\Http\Session;
 
+use SessionHandlerInterface;
+
 /*
  * PHP's native session, started on first use with an HttpOnly, SameSite=Lax cookie
- * (Secure in production), so requests that never touch it don't create one.
+ * (Secure in production), so requests that never touch it don't create one. With a
+ * handler (DatabaseSessionHandler in the app), sessions are stored there instead of
+ * in files, in strict mode so a cookie with an unknown ID gets a fresh session.
  */
 final class NativeSessionStore implements SessionStore
 {
-    public function __construct(private readonly bool $secureCookie)
-    {
+    public function __construct(
+        private readonly bool $secureCookie,
+        private readonly ?SessionHandlerInterface $handler = null,
+    ) {
     }
 
     public function get(string $key): mixed
@@ -65,6 +71,11 @@ final class NativeSessionStore implements SessionStore
             return;
         }
 
+        if ($this->handler !== null) {
+            ini_set('session.serialize_handler', 'php_serialize');
+            ini_set('session.use_strict_mode', '1');
+            session_set_save_handler($this->handler, true);
+        }
         session_name('vending_session');
         session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $this->secureCookie, 'httponly' => true, 'samesite' => 'Lax']);
         session_start();

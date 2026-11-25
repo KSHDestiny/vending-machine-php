@@ -7,6 +7,7 @@ namespace Tests\Unit\Controllers;
 use App\Enums\Role;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Support\Page;
@@ -26,6 +27,9 @@ final class AdminUsersControllerTest extends TestCase
 
     private Application $app;
 
+    /** @var array<string, object> The repositories given to the app; one test swaps the sessions for a mock. */
+    private array $overrides;
+
     /** @var array<int, User> The users find() returns, by id. */
     private array $accounts;
 
@@ -40,7 +44,8 @@ final class AdminUsersControllerTest extends TestCase
         $transactions->method('summary')->willReturn(['count' => 2, 'items_sold' => 5, 'revenue' => '34.425']);
         $transactions->method('paginateForUser')->willReturn(new Page([], 0, 1, 5));
 
-        $this->app = new Application(['users' => $this->users, 'transactions' => $transactions, 'transactionManager' => new ImmediateTransactions()]);
+        $this->overrides = ['users' => $this->users, 'transactions' => $transactions, 'sessions' => $this->createStub(SessionRepositoryInterface::class), 'transactionManager' => new ImmediateTransactions()];
+        $this->app = new Application($this->overrides);
         $this->app->actingAs($this->accounts[1]);
     }
 
@@ -91,6 +96,10 @@ final class AdminUsersControllerTest extends TestCase
     public function testAdminDeactivatesAnAccountThroughTheForm(): void
     {
         $this->users->expects(self::once())->method('updateStatus')->with(2, UserStatus::Inactive);
+        $sessions = $this->createMock(SessionRepositoryInterface::class);
+        $sessions->expects(self::once())->method('deleteForUser')->with(2);
+        $this->app = new Application(['sessions' => $sessions] + $this->overrides);
+        $this->app->actingAs($this->accounts[1]);
 
         self::assertSame(303, $this->app->submit('PATCH', '/admin/users/2/status', ['status' => 'inactive'])->status);
     }

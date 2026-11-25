@@ -11,6 +11,7 @@ use App\Exceptions\NotFoundException;
 use App\Exceptions\ValidationException;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Support\Page;
@@ -32,6 +33,7 @@ final class UserManagementService
     public function __construct(
         private readonly UserRepositoryInterface $users,
         private readonly TransactionRepositoryInterface $transactions,
+        private readonly SessionRepositoryInterface $sessions,
         private readonly TransactionManager $database,
     ) {
     }
@@ -100,7 +102,8 @@ final class UserManagementService
     }
 
     /**
-     * Activates or deactivates the account ('active' or 'inactive'); ValidationException if not allowed.
+     * Activates or deactivates the account ('active' or 'inactive'); deactivating also deletes
+     * the user's stored sessions. ValidationException if not allowed.
      * 'changed' is false when the account already had that status.
      * @return array{user: User, changed: bool}
      */
@@ -120,6 +123,9 @@ final class UserManagementService
                 throw new ValidationException(['status' => $reason]);
             }
             $this->users->updateStatus($user->id, $newStatus);
+            if ($newStatus === UserStatus::Inactive) {
+                $this->sessions->deleteForUser($user->id);
+            }
 
             return true;
         });

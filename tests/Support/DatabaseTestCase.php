@@ -33,7 +33,7 @@ abstract class DatabaseTestCase extends TestCase
 
         $pdo = $this->database->pdo();
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
-        foreach (['transactions', 'products', 'users'] as $table) {
+        foreach (['sessions', 'transactions', 'products', 'users'] as $table) {
             $pdo->exec("TRUNCATE TABLE {$table}");
         }
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');

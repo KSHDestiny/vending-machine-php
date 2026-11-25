@@ -7,6 +7,7 @@ namespace Tests\Unit\Services;
 use App\Enums\Role;
 use App\Exceptions\ValidationException;
 use App\Models\User;
+use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Services\AccountService;
 use PHPUnit\Framework\TestCase;
@@ -20,7 +21,7 @@ final class AccountServiceTest extends TestCase
         $users->expects(self::once())->method('updateName')->with(2, 'New Name');
         $users->method('find')->willReturn(new User(2, 'New Name', 'buyer@example.com', $user->passwordHash, Role::User));
 
-        self::assertSame('New Name', (new AccountService($users))->updateName($user, ['name' => '  New Name ', 'role' => 'admin', 'email' => 'x@example.com'])->name);
+        self::assertSame('New Name', (new AccountService($users, $this->createStub(SessionRepositoryInterface::class)))->updateName($user, ['name' => '  New Name ', 'role' => 'admin', 'email' => 'x@example.com'])->name);
     }
 
     public function testEmptyNameIsRejected(): void
@@ -30,7 +31,7 @@ final class AccountServiceTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        (new AccountService($users))->updateName(self::user(), ['name' => '   ']);
+        (new AccountService($users, $this->createStub(SessionRepositoryInterface::class)))->updateName(self::user(), ['name' => '   ']);
     }
 
     public function testPasswordChangesOnlyWithTheCurrentPassword(): void
@@ -40,14 +41,19 @@ final class AccountServiceTest extends TestCase
             ->method('updatePassword')
             ->with(2, self::callback(static fn (string $hash): bool => password_verify('Abcdef1!', $hash)));
 
-        (new AccountService($users))->changePassword(self::user(), ['current_password' => 'secret123', 'password' => 'Abcdef1!', 'password_confirmation' => 'Abcdef1!']);
+        $sessions = $this->createMock(SessionRepositoryInterface::class);
+        $sessions->expects(self::once())->method('deleteForUser')->with(2);
+
+        (new AccountService($users, $sessions))->changePassword(self::user(), ['current_password' => 'secret123', 'password' => 'Abcdef1!', 'password_confirmation' => 'Abcdef1!']);
     }
 
     public function testWrongCurrentPasswordShortOrMismatchedNewPasswordIsRejected(): void
     {
         $users = $this->createMock(UserRepositoryInterface::class);
         $users->expects(self::never())->method('updatePassword');
-        $service = new AccountService($users);
+        $sessions = $this->createMock(SessionRepositoryInterface::class);
+        $sessions->expects(self::never())->method('deleteForUser');
+        $service = new AccountService($users, $sessions);
 
         $errors = static function (array $input) use ($service): array {
             try {

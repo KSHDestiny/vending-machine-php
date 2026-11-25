@@ -9,6 +9,7 @@ use App\Enums\UserStatus;
 use App\Exceptions\NotFoundException;
 use App\Exceptions\ValidationException;
 use App\Models\User;
+use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Services\UserManagementService;
@@ -33,7 +34,7 @@ final class UserManagementServiceTest extends TestCase
     {
         $this->users = $this->createMock(UserRepositoryInterface::class);
         $this->database = new ImmediateTransactions();
-        $this->service = new UserManagementService($this->users, $this->createStub(TransactionRepositoryInterface::class), $this->database);
+        $this->service = new UserManagementService($this->users, $this->createStub(TransactionRepositoryInterface::class), $this->createStub(SessionRepositoryInterface::class), $this->database);
     }
 
     public function testAdminPromotesACustomer(): void
@@ -110,6 +111,24 @@ final class UserManagementServiceTest extends TestCase
         $this->users->expects(self::once())->method('updateStatus')->with(2, UserStatus::Inactive);
 
         self::assertSame(UserStatus::Inactive, $this->service->changeStatus(self::admin(), 2, 'inactive')['user']->status);
+    }
+
+    public function testDeactivationEndsTheUsersSessionsButReactivationDoesNot(): void
+    {
+        $this->users->method('lockActiveAdminIds')->willReturn([1]);
+        $this->users->method('find')->willReturnOnConsecutiveCalls(
+            self::customer(),
+            self::user(2, Role::User, UserStatus::Inactive),
+            self::user(2, Role::User, UserStatus::Inactive),
+            self::customer(),
+        );
+        $this->users->expects(self::exactly(2))->method('updateStatus');
+        $sessions = $this->createMock(SessionRepositoryInterface::class);
+        $sessions->expects(self::once())->method('deleteForUser')->with(2);
+        $service = new UserManagementService($this->users, $this->createStub(TransactionRepositoryInterface::class), $sessions, $this->database);
+
+        $service->changeStatus(self::admin(), 2, 'inactive');
+        $service->changeStatus(self::admin(), 2, 'active');
     }
 
     public function testAdminCannotDeactivateThemselves(): void

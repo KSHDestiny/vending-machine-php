@@ -33,6 +33,10 @@ their purchase history. The same rules are available as a JWT-secured REST API.
   and a symbol (at most 72 bytes).
 - **Security:** CSRF tokens on browser forms, escaped HTML output, prepared
   statements, HttpOnly/SameSite session cookies and session renewal on login.
+- **Sessions in MySQL:** sign-ins survive restarts and redeploys. Only a SHA-256
+  hash of each session ID is stored; sessions end after 2 hours idle or 12 hours
+  after sign-in. Logout deletes the session, a password change signs out the
+  user's other devices, and deactivation signs them out everywhere.
 
 ## Database design
 
@@ -41,6 +45,7 @@ their purchase history. The same rules are available as a JWT-secured REST API.
 | `users` | id, name, email (unique), password (hash), role (`admin`/`user`), status (`active`/`inactive`), deactivated_at, timestamps | Plain passwords are never stored. Deactivated accounts keep their purchases. |
 | `products` | id, name, price `DECIMAL(10,3)`, quantity_available (unsigned), timestamps, deleted_at | Deleting a product is a soft delete, so purchase history keeps it. |
 | `transactions` | id, user_id → users, product_id → products, quantity, unit_price, total_price, created_at | Stores the price at purchase time. Foreign keys restrict deletes; a check keeps `total_price = unit_price × quantity`. |
+| `sessions` | id (SHA-256 of the session ID), user_id → users, payload, last_activity, created_at | Web sessions; deleted with the user's account by cascade. |
 
 Migrations are in `database/migrations/` and seeders in `database/seeders/`.
 
@@ -178,5 +183,4 @@ volume; services sleep when idle and stop if the credit is exhausted.
 
 - Users cannot be deleted; admins deactivate them instead. Purchase records cannot be edited or deleted:
   purchases are kept as an audit history. Products use soft deletes.
-- Sessions are stored as files in the web container, so a restart signs users
-  out. API tokens cannot be revoked before they expire.
+- API tokens cannot be revoked before they expire.

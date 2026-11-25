@@ -13,6 +13,7 @@ use App\Database\Database;
 use App\Database\TransactionManager;
 use App\Http\ErrorHandler;
 use App\Http\Kernel;
+use App\Http\Session\DatabaseSessionHandler;
 use App\Http\Session\NativeSessionStore;
 use App\Http\Routing\Router;
 use App\Http\Session\Session;
@@ -21,9 +22,11 @@ use App\Http\Session\SessionStore;
 use App\Auth\TokenAuth;
 use App\Http\View;
 use App\Repositories\Contracts\ProductRepositoryInterface;
+use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Repositories\ProductRepository;
+use App\Repositories\SessionRepository;
 use App\Repositories\TransactionRepository;
 use App\Repositories\UserRepository;
 use App\Services\AccountService;
@@ -37,7 +40,7 @@ use App\Support\Logger;
 
 /**
  * @param array{production: bool, db: array{host: string, port: int, name: string, user: string, password: string}, jwt: array{secret: string, ttl: int}, paths: array{views: string, migrations: string, log: string}} $config
- * @param array{products?: ProductRepositoryInterface, users?: UserRepositoryInterface, transactions?: TransactionRepositoryInterface, transactionManager?: TransactionManager} $overrides
+ * @param array{products?: ProductRepositoryInterface, users?: UserRepositoryInterface, transactions?: TransactionRepositoryInterface, sessions?: SessionRepositoryInterface, transactionManager?: TransactionManager} $overrides
  */
 return static function (array $config, ?SessionStore $sessionStore = null, array $overrides = []): Kernel {
     // Infrastructure: the error log and the PDO connection (opened on first use).
@@ -48,17 +51,18 @@ return static function (array $config, ?SessionStore $sessionStore = null, array
     $productRepository = $overrides['products'] ?? new ProductRepository($database);
     $userRepository = $overrides['users'] ?? new UserRepository($database);
     $transactionRepository = $overrides['transactions'] ?? new TransactionRepository($database);
+    $sessionRepository = $overrides['sessions'] ?? new SessionRepository($database);
 
     // Services: the business rules, shared by the web pages and the API.
     $authService = new AuthService($userRepository);
-    $accountService = new AccountService($userRepository);
+    $accountService = new AccountService($userRepository, $sessionRepository);
     $productService = new ProductService($productRepository);
     $purchaseService = new PurchaseService($productRepository, $transactionRepository, $overrides['transactionManager'] ?? $database);
     $jwtService = new JwtService($config['jwt']['secret'], $config['jwt']['ttl']);
-    $userManagement = new UserManagementService($userRepository, $transactionRepository, $overrides['transactionManager'] ?? $database);
+    $userManagement = new UserManagementService($userRepository, $transactionRepository, $sessionRepository, $overrides['transactionManager'] ?? $database);
 
     // HTTP: the session, the signed-in user (session for web, JWT for API) and the views.
-    $session = new Session($sessionStore ?? new NativeSessionStore($config['production']));
+    $session = new Session($sessionStore ?? new NativeSessionStore($config['production'], new DatabaseSessionHandler($sessionRepository)));
     $sessionAuth = new SessionAuth($session, $authService);
     $tokenAuth = new TokenAuth($jwtService, $authService);
     $view = new View($config['paths']['views'], $session, $sessionAuth);

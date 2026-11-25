@@ -104,7 +104,7 @@ final class ProductsControllerTest extends TestCase
         $this->products->method('findForUpdate')->willReturn(new Product(2, 'Pepsi', '6.885', 5));
         $this->transactions->expects(self::once())
             ->method('create')
-            ->with(2, 2, 2, '6.885', '13.770')
+            ->with(2, 2, 'Pepsi', 2, '6.885', '13.770')
             ->willReturn(new Transaction(7, 2, 2, 2, '6.885', '13.770', '2026-01-01 00:00:00', 'Pepsi'));
 
         $response = $this->app->api('POST', '/api/products/2/purchase', $this->app->tokenFor(self::customer()), ['quantity' => 2, 'price' => '0.001']);

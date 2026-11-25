@@ -28,7 +28,7 @@ final class PurchaseServiceTest extends TestCase
         $transactions = $this->createMock(TransactionRepositoryInterface::class);
         $transactions->expects(self::once())
             ->method('create')
-            ->with(5, 2, 3, '6.885', '20.655')
+            ->with(5, 2, 'Pepsi', 3, '6.885', '20.655')
             ->willReturn(new Transaction(1, 5, 2, 3, '6.885', '20.655', 'now'));
 
         (new PurchaseService($products, $transactions, $this->inventory($products), new ImmediateTransactions()))->purchase(self::buyer(), 2, '3');

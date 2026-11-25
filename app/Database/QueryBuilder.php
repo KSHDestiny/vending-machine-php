@@ -181,6 +181,26 @@ final class QueryBuilder
     }
 
     /**
+     * Up to $count matching rows (in the current order).
+     * @return list<array<string, mixed>>
+     */
+    public function take(int $count): array
+    {
+        return $this->run($this->selectSql(' LIMIT ' . max(1, $count)), $this->bindings);
+    }
+
+    /**
+     * The number of matching rows and the exact sum of a column (null when nothing matches).
+     * @return array{count: int, sum: ?string}
+     */
+    public function countAndSum(string $column): array
+    {
+        $rows = $this->run('SELECT COUNT(*) AS aggregate, SUM(' . self::column($column) . ') AS total FROM ' . $this->table . $this->joinSql() . $this->whereSql(), $this->bindings);
+
+        return ['count' => (int) ($rows[0]['aggregate'] ?? 0), 'sum' => isset($rows[0]['total']) ? (string) $rows[0]['total'] : null];
+    }
+
+    /**
      * The number of matching rows.
      * @return int
      */

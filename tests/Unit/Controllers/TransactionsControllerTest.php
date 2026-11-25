@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Support\Page;
+use App\Support\TransactionFilter;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\Application;
@@ -82,9 +83,48 @@ final class TransactionsControllerTest extends TestCase
         self::assertMatchesRegularExpression('#href="/admin/products/\d+/inventory"#', $admin, 'back to the product\'s stock history');
     }
 
+    public function testAdminFiltersArePassedThroughAndTotalled(): void
+    {
+        $this->transactions->expects(self::once())
+            ->method('paginate')
+            ->with(1, 10, self::callback(static fn (TransactionFilter $f): bool => $f->customer === 'alice' && $f->product === 'coke' && $f->from?->format('Y-m-d') === '2026-03-01' && $f->to?->format('Y-m-d') === '2026-03-31'))
+            ->willReturn(new Page([self::purchase(userId: 2)], 1, 1, 10));
+        $this->transactions->method('totals')->willReturn(['count' => 1, 'revenue' => '13.770']);
+        $this->app->actingAs(self::user(1, Role::Admin));
+
+        $body = $this->app->send('GET', '/admin/transactions', query: ['customer' => 'alice', 'product' => 'coke', 'from' => '2026-03-31', 'to' => '2026-03-01'])->body;
+
+        self::assertStringContainsString('for these filters', $body);
+        self::assertStringContainsString('$13.77', $body);
+        self::assertStringContainsString('href="/admin/transactions/export?customer=alice&amp;product=coke&amp;from=2026-03-01&amp;to=2026-03-31"', $body, 'export keeps the filters; the reversed range was swapped');
+    }
+
+    public function testExportIsACsvDownloadForAdminsOnly(): void
+    {
+        $this->transactions->expects(self::once())->method('each')->willReturn([
+            new Transaction(7, 2, 2, 2, '6.885', '13.770', '2026-03-01 10:00:00', '=cmd', 'Buyer, Jr.', 'buyer@example.com'),
+        ]);
+
+        $this->app->actingAs(self::user(2));
+        self::assertSame(403, $this->app->send('GET', '/admin/transactions/export')->status);
+
+        $this->app->actingAs(self::user(1, Role::Admin));
+        $response = $this->app->send('GET', '/admin/transactions/export', query: ['product' => 'cmd']);
+
+        self::assertSame(200, $response->status);
+        self::assertSame('text/csv; charset=utf-8', $response->headers['Content-Type']);
+        self::assertMatchesRegularExpression('/^attachment; filename="transactions-\d{4}-\d{2}-\d{2}\.csv"$/', $response->headers['Content-Disposition']);
+        self::assertSame(
+            "\"Purchase\",\"Date (UTC)\",\"Buyer\",\"Email\",\"Product\",\"Quantity\",\"Unit price\",\"Total\"\r\n"
+            . "\"7\",\"2026-03-01 10:00:00\",\"Buyer, Jr.\",\"buyer@example.com\",\"'=cmd\",\"2\",\"6.885\",\"13.770\"\r\n",
+            $response->body,
+        );
+    }
+
     public function testOnlyAdminsSeeAllTransactions(): void
     {
         $this->transactions->method('paginate')->willReturn(new Page([self::purchase(userId: 2)], 1, 1, 10));
+        $this->transactions->method('totals')->willReturn(['count' => 1, 'revenue' => '13.770']);
 
         $this->app->actingAs(self::user(2));
         self::assertSame(403, $this->app->send('GET', '/admin/transactions')->status);

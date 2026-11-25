@@ -50,7 +50,7 @@ their purchase history. The same rules are available as a JWT-secured REST API.
 | --- | --- | --- |
 | `users` | id, name, email (unique), password (hash), role (`admin`/`user`), status (`active`/`inactive`), deactivated_at, timestamps | Plain passwords are never stored. Deactivated accounts keep their purchases. |
 | `products` | id, name, price `DECIMAL(10,3)`, quantity_available (unsigned), status (`active`/`inactive`), timestamps, deleted_at | Deleting a product is a soft delete, so purchase history keeps it. |
-| `transactions` | id, user_id → users, product_id → products, quantity, unit_price, total_price, created_at | Stores the price at purchase time. Foreign keys restrict deletes; a check keeps `total_price = unit_price × quantity`. |
+| `transactions` | id, user_id → users, product_id → products, product_name, quantity, unit_price, total_price, created_at | Stores the product name and price at purchase time, so renames and price changes don't rewrite history. Foreign keys restrict deletes; a check keeps `total_price = unit_price × quantity`. |
 | `inventory_movements` | id, product_id, user_id, transaction_id, movement_type, quantity_change, quantity_before, quantity_after, reason, created_at | Append-only stock history; a CHECK keeps before + change = after. |
 | `sessions` | id (SHA-256 of the session ID), user_id → users, payload, last_activity, created_at | Web sessions; deleted with the user's account by cascade. |
 
@@ -100,7 +100,7 @@ tests; it is created only when the MySQL volume is new.
 | Guests | `/login`, `/register` |
 | Signed in | `/products` (search, sort, pages), `/products/{id}`, `/account` |
 | Customers | Buy from `/products/{id}`, see `/my-transactions` and each confirmation |
-| Admins | `/admin` dashboard with a 7/14/30-day sales trend, `/admin/products` (add, edit, delete, on/off sale, `/admin/products/{id}/inventory` stock history and restock), `/admin/transactions`, `/admin/users` (search, filter, change role, activate or deactivate) |
+| Admins | `/admin` dashboard with a 7/14/30-day sales trend, `/admin/products` (add, edit, delete, on/off sale, `/admin/products/{id}/inventory` stock history and restock), `/admin/transactions` (filter by customer, product and dates; CSV export of the filtered list), `/admin/users` (search, filter, change role, activate or deactivate) |
 
 ## REST API
 
@@ -185,6 +185,30 @@ proxy for the web app.
 
 The Free plan's $1 monthly usage credit covers both services and the database
 volume; services sleep when idle and stop if the credit is exhausted.
+
+### Data backfills
+
+Some migrations add data that older databases don't have yet. New databases need
+nothing extra: the seeder records the starting stock, and new purchases store
+their product name.
+
+| Migration | Backfill | How it runs today |
+| --- | --- | --- |
+| `007` inventory movements | Each existing product's stock is recorded as `INITIAL_STOCK` | Inside the migration (`INSERT ... SELECT`), automatically |
+| `009` transactions.product_name | Older purchases get the name of their product | **Manually, once**, after the deploy that runs `009` |
+
+The one-off SQL for `009` (safe to run again; it only fills empty names):
+
+```sql
+UPDATE transactions t JOIN products p ON p.id = t.product_id
+SET t.product_name = p.name WHERE t.product_name = '';
+```
+
+Check afterwards that nothing is left empty:
+
+```sql
+SELECT COUNT(*) FROM transactions WHERE product_name = '';
+```
 
 ## Known limitations
 

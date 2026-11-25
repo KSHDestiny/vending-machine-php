@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Auth\LoginCooldown;
 use App\Auth\SessionAuth;
 use App\Exceptions\AuthenticationException;
 use App\Exceptions\ValidationException;
@@ -26,6 +27,7 @@ final class AuthController
         private readonly SessionAuth $auth,
         private readonly Session $session,
         private readonly View $view,
+        private readonly LoginCooldown $cooldown,
     ) {
     }
 
@@ -36,7 +38,9 @@ final class AuthController
     #[Route('/register', ['GET'], ['guest'])]
     public function showRegister(Request $request): Response
     {
-        return $this->view->render('auth/register', ['title' => 'Register', 'input' => ['name' => '', 'email' => ''], 'errors' => []]);
+        $kept = $this->session->takeForm('register');
+
+        return $this->view->render('auth/register', ['title' => 'Register', 'input' => $kept['input'] + ['name' => '', 'email' => ''], 'errors' => $kept['errors']]);
     }
 
     /**
@@ -50,10 +54,10 @@ final class AuthController
         try {
             $user = $this->users->register($input);
         } catch (ValidationException $e) {
-            // Never send the passwords back into the form.
-            $safe = ['name' => $input['name'], 'email' => $input['email']];
+            // Never keep the passwords.
+            $this->session->flashForm('register', ['name' => $input['name'], 'email' => $input['email']], $e->errors);
 
-            return $this->view->render('auth/register', ['title' => 'Register', 'input' => $safe, 'errors' => $e->errors], 422);
+            return Response::redirect('/register');
         }
 
         $this->auth->login($user);
@@ -63,31 +67,52 @@ final class AuthController
     }
 
     /**
-     * The login form.
+     * The login form, with the message and email from a refused try (shown once) and, during the
+     * cooldown, the seconds left: the page shows them in its message and app.js counts them down.
      * @return Response
      */
     #[Route('/login', ['GET'], ['guest'])]
     public function showLogin(Request $request): Response
     {
-        return $this->view->render('auth/login', ['title' => 'Log in', 'email' => '', 'errors' => []]);
+        $kept = $this->session->takeForm('login');
+        $email = $kept['input']['email'] ?? '';
+        $errors = $kept['errors'];
+        $seconds = $this->cooldown->secondsLeft();
+
+        return $this->view->render('auth/login', [
+            'title' => 'Log in',
+            'email' => $email,
+            'errors' => $errors,
+            'retryAfter' => $seconds,
+        ]);
     }
 
     /**
-     * Signs in and goes to the dashboard or the catalogue, or shows the form again.
+     * Signs in and goes to the dashboard or the catalogue. A wrong password, or any try during the
+     * cooldown, redirects back to the form (post, then redirect), so reloading the page never
+     * resends the password; the cooldown is checked before the password.
      * @return Response
      */
     #[Route('/login', ['POST'], ['guest'])]
     public function login(Request $request): Response
     {
         $email = trim($request->input('email'));
+        if ($this->cooldown->secondsLeft() > 0) {
+            return $this->backToForm($email, '');
+        }
         try {
             $user = $this->users->attempt($email, $request->input('password'));
         } catch (ValidationException $e) {
-            return $this->view->render('auth/login', ['title' => 'Log in', 'email' => $email, 'errors' => $e->errors], 422);
+            $this->session->flashForm('login', ['email' => $email], $e->errors);
+
+            return Response::redirect('/login');
         } catch (AuthenticationException $e) {
-            return $this->view->render('auth/login', ['title' => 'Log in', 'email' => $email, 'errors' => ['form' => $e->getMessage()]], 422);
+            $this->cooldown->failed();
+
+            return $this->backToForm($email, $e->getMessage());
         }
 
+        $this->cooldown->succeeded();
         $this->auth->login($user);
 
         return Response::redirect(self::home($user));
@@ -112,5 +137,16 @@ final class AuthController
     private static function home(User $user): string
     {
         return $user->canManageProducts() ? '/admin' : '/products';
+    }
+
+    /**
+     * Redirects to the login form, which shows the message (or the cooldown) and keeps the email.
+     * @return Response
+     */
+    private function backToForm(string $email, string $message): Response
+    {
+        $this->session->flashForm('login', ['email' => $email], $message === '' ? [] : ['form' => $message]);
+
+        return Response::redirect('/login');
     }
 }

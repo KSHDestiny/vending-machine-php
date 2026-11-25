@@ -128,8 +128,8 @@ final class ProductsControllerTest extends TestCase
 
         $this->app->actingAs(self::admin());
         $response = $this->app->submit('POST', '/admin/products/2/restock', ['quantity' => '0']);
-        self::assertSame(422, $response->status);
-        self::assertStringContainsString('Quantity must be', $response->body);
+        self::assertSame('/admin/products/2/inventory', $response->headers['Location'] ?? null);
+        self::assertStringContainsString('Quantity must be', $this->app->follow($response)->body);
 
         $this->app->actingAs(self::customer());
         self::assertSame(403, $this->app->submit('POST', '/admin/products/2/restock', ['quantity' => '5'])->status);
@@ -153,9 +153,11 @@ final class ProductsControllerTest extends TestCase
         $this->products->expects(self::never())->method('create');
 
         $response = $this->app->submit('POST', '/admin/products', ['name' => 'Tea', 'price' => '0', 'quantity_available' => '3']);
+        $page = $this->app->follow($response)->body;
 
-        self::assertSame(422, $response->status);
-        self::assertStringContainsString('Price must be greater than 0', $response->body);
+        self::assertSame('/admin/products/create', $response->headers['Location'] ?? null);
+        self::assertStringContainsString('Price must be greater than 0', $page);
+        self::assertStringContainsString('value="Tea"', $page, 'the values entered are kept');
     }
 
     public function testNegativeInventoryIsRejected(): void
@@ -165,8 +167,8 @@ final class ProductsControllerTest extends TestCase
 
         $response = $this->app->submit('POST', '/admin/products', ['name' => 'Tea', 'price' => '1.00', 'quantity_available' => '-1']);
 
-        self::assertSame(422, $response->status);
-        self::assertStringContainsString('Quantity available must be a whole number of 0 or more.', $response->body);
+        self::assertSame('/admin/products/create', $response->headers['Location'] ?? null);
+        self::assertStringContainsString('Quantity available must be a whole number of 0 or more.', $this->app->follow($response)->body);
     }
 
     public function testProductUpdateWorks(): void
@@ -237,9 +239,11 @@ final class ProductsControllerTest extends TestCase
         $this->transactions->expects(self::never())->method('create');
 
         $response = $this->app->submit('POST', '/products/2/purchase', ['quantity' => '2']);
+        $page = $this->app->follow($response)->body;
 
-        self::assertSame(422, $response->status);
-        self::assertStringContainsString('Only 1 left in stock.', $response->body);
+        self::assertSame('/products/2', $response->headers['Location'] ?? null);
+        self::assertStringContainsString('Only 1 left in stock.', $page);
+        self::assertStringContainsString('value="2"', $page, 'the quantity entered is kept');
     }
 
     public function testZeroOrNegativePurchaseQuantityIsRejected(): void
@@ -250,7 +254,8 @@ final class ProductsControllerTest extends TestCase
 
         foreach (['0', '-3', '1.5', ''] as $quantity) {
             $response = $this->app->submit('POST', '/products/2/purchase', ['quantity' => $quantity]);
-            self::assertSame(422, $response->status, "quantity '{$quantity}'");
+            self::assertSame('/products/2', $response->headers['Location'] ?? null, "quantity '{$quantity}'");
+            self::assertStringContainsString('Quantity', $this->app->follow($response)->body);
         }
     }
 

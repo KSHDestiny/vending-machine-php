@@ -49,7 +49,7 @@ final class AdminUsersController
     #[Route('/admin/users/{id}', ['GET'], ['admin'])]
     public function show(Request $request, int $id): Response
     {
-        return $this->page($id, []);
+        return $this->page($id, $this->session->takeForm("user-{$id}")['errors']);
     }
 
     /**
@@ -62,7 +62,9 @@ final class AdminUsersController
         try {
             ['user' => $user, 'changed' => $changed] = $this->users->changeRole($this->actor(), $id, $request->input('role'));
         } catch (ValidationException $e) {
-            return $this->page($id, $e->errors, 422);
+            $this->session->flashForm("user-{$id}", [], $e->errors);
+
+            return Response::redirect("/admin/users/{$id}");
         }
 
         $this->session->flash($changed ? "{$user->name} is now {$user->role->label()}." : "No change: {$user->name} is already {$user->role->label()}.");
@@ -80,7 +82,9 @@ final class AdminUsersController
         try {
             ['user' => $user, 'changed' => $changed] = $this->users->changeStatus($this->actor(), $id, $request->input('status'));
         } catch (ValidationException $e) {
-            return $this->page($id, $e->errors, 422);
+            $this->session->flashForm("user-{$id}", [], $e->errors);
+
+            return Response::redirect("/admin/users/{$id}");
         }
 
         $this->session->flash(match (true) {
@@ -97,11 +101,11 @@ final class AdminUsersController
      * @param array<string, string> $errors
      * @return Response
      */
-    private function page(int $id, array $errors, int $status = 200): Response
+    private function page(int $id, array $errors): Response
     {
         $profile = $this->users->profile($id, $this->actor());
 
-        return $this->view->render('admin/users/show', ['title' => $profile['user']->name, 'errors' => $errors, 'isSelf' => $profile['user']->id === $this->actor()->id] + $profile, $status);
+        return $this->view->render('admin/users/show', ['title' => $profile['user']->name, 'errors' => $errors, 'isSelf' => $profile['user']->id === $this->actor()->id] + $profile);
     }
 
     /**

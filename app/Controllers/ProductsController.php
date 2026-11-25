@@ -56,7 +56,9 @@ final class ProductsController
         // Customers only see products on sale; admins can open any product.
         $product = $this->auth->user()?->canManageProducts() ? $this->products->find($id) : $this->products->findOnSale($id);
 
-        return $this->details($product, '1', []);
+        $kept = $this->session->takeForm("purchase-{$id}");
+
+        return $this->details($product, $kept['input']['quantity'] ?? '1', $kept['errors']);
     }
 
     /**
@@ -70,7 +72,9 @@ final class ProductsController
         try {
             $transaction = $this->purchases->purchase($this->auth->user(), $id, $quantity);
         } catch (ValidationException $e) {
-            return $this->details($this->products->find($id), $quantity, $e->errors, 422);
+            $this->session->flashForm("purchase-{$id}", ['quantity' => $quantity], $e->errors);
+
+            return Response::redirect("/products/{$id}");
         }
 
         $this->session->flash('Thank you! Your purchase is complete.');
@@ -95,7 +99,9 @@ final class ProductsController
     #[Route('/admin/products/create', ['GET'], ['admin'])]
     public function create(Request $request): Response
     {
-        return $this->form(null, ['name' => '', 'price' => '', 'quantity_available' => ''], []);
+        $kept = $this->session->takeForm('product-new');
+
+        return $this->form(null, $kept['input'] + ['name' => '', 'price' => '', 'quantity_available' => ''], $kept['errors']);
     }
 
     /**
@@ -109,7 +115,9 @@ final class ProductsController
         try {
             $product = $this->products->create($this->admin(), $input);
         } catch (ValidationException $e) {
-            return $this->form(null, $input, $e->errors, 422);
+            $this->session->flashForm('product-new', $input, $e->errors);
+
+            return Response::redirect('/admin/products/create');
         }
 
         $this->session->flash("Added {$product->name}.");
@@ -126,8 +134,9 @@ final class ProductsController
     {
         $product = $this->products->find($id);
         $input = ['name' => $product->name, 'price' => $product->price, 'quantity_available' => (string) $product->quantityAvailable, 'status' => $product->status->value];
+        $kept = $this->session->takeForm("product-{$id}");
 
-        return $this->form($product, $input, []);
+        return $this->form($product, $kept['input'] + $input, $kept['errors']);
     }
 
     /**
@@ -137,12 +146,13 @@ final class ProductsController
     #[Route('/admin/products/{id}', ['PUT'], ['admin'])]
     public function update(Request $request, int $id): Response
     {
-        $product = $this->products->find($id);
         $input = $request->only('name', 'price', 'quantity_available', 'status');
         try {
             $product = $this->products->update($this->admin(), $id, $input);
         } catch (ValidationException $e) {
-            return $this->form($product, $input, $e->errors, 422);
+            $this->session->flashForm("product-{$id}", $input, $e->errors);
+
+            return Response::redirect("/admin/products/{$id}/edit");
         }
 
         $this->session->flash("Saved {$product->name}.");
@@ -170,7 +180,9 @@ final class ProductsController
     #[Route('/admin/products/{id}/inventory', ['GET'], ['admin'])]
     public function inventory(Request $request, int $id): Response
     {
-        return $this->inventoryPage($request, $id, ['quantity' => '', 'reason' => ''], []);
+        $kept = $this->session->takeForm("restock-{$id}");
+
+        return $this->inventoryPage($request, $id, $kept['input'] + ['quantity' => '', 'reason' => ''], $kept['errors']);
     }
 
     /**
@@ -184,7 +196,9 @@ final class ProductsController
         try {
             $product = $this->inventory->restock($this->admin(), $id, $input);
         } catch (ValidationException $e) {
-            return $this->inventoryPage($request, $id, $input, $e->errors, 422);
+            $this->session->flashForm("restock-{$id}", $input, $e->errors);
+
+            return Response::redirect("/admin/products/{$id}/inventory");
         }
 
         $this->session->flash("Added {$input['quantity']} to {$product->name}; {$product->quantityAvailable} in stock now.");
@@ -210,9 +224,9 @@ final class ProductsController
      * @param array<string, string> $errors
      * @return Response
      */
-    private function details(Product $product, string $quantity, array $errors, int $status = 200): Response
+    private function details(Product $product, string $quantity, array $errors): Response
     {
-        return $this->view->render('products/show', ['title' => $product->name, 'product' => $product, 'quantity' => $quantity, 'errors' => $errors], $status);
+        return $this->view->render('products/show', ['title' => $product->name, 'product' => $product, 'quantity' => $quantity, 'errors' => $errors]);
     }
 
     /**
@@ -221,11 +235,11 @@ final class ProductsController
      * @param array<string, string> $errors
      * @return Response
      */
-    private function form(?Product $product, array $input, array $errors, int $status = 200): Response
+    private function form(?Product $product, array $input, array $errors): Response
     {
         $title = $product === null ? 'Add product' : "Edit {$product->name}";
 
-        return $this->view->render('admin/products/form', ['title' => $title, 'product' => $product, 'input' => $input, 'errors' => $errors], $status);
+        return $this->view->render('admin/products/form', ['title' => $title, 'product' => $product, 'input' => $input, 'errors' => $errors]);
     }
 
     /**
@@ -234,7 +248,7 @@ final class ProductsController
      * @param array<string, string> $errors
      * @return Response
      */
-    private function inventoryPage(Request $request, int $id, array $input, array $errors, int $status = 200): Response
+    private function inventoryPage(Request $request, int $id, array $input, array $errors): Response
     {
         $product = $this->products->find($id);
         $type = $request->query('type');
@@ -246,7 +260,7 @@ final class ProductsController
             'type' => $type,
             'input' => $input,
             'errors' => $errors,
-        ], $status);
+        ]);
     }
 
     /**
